@@ -198,18 +198,36 @@ body {
 .message {
   margin-bottom: 16px;
   display: flex;
-  flex-direction: column;
+  gap: 10px;
   max-width: 70%;
 }
 
 .message.sent {
   align-self: flex-end;
-  align-items: flex-end;
+  flex-direction: row-reverse;
 }
 
 .message.received {
   align-self: flex-start;
-  align-items: flex-start;
+}
+
+.message-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100% - 46px);
 }
 
 .message-username {

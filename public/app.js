@@ -1,5 +1,24 @@
 const BOT_NAME = '小助手';
 
+const AVATAR_EMOJIS = [
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼',
+  '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔',
+  '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐝',
+  '🦋', '🐌', '🐛', '🦟', '🦗', '🐢', '🐍', '🦎',
+  '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡',
+  '🐠', '🐟', '🐬', '🦈', '🐳', '🐋', '🦭', '🐊',
+  '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🦛', '🦏',
+  '🐪', '🐫', '🦒', '🦘', '🦡', '🦦', '🦥', '🦔'
+];
+
+function getAvatarEmoji(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_EMOJIS[Math.abs(hash) % AVATAR_EMOJIS.length];
+}
+
 let username = '';
 let socket = null;
 let onlineUsers = [];
@@ -55,7 +74,7 @@ function renderMembersList(users) {
     const isBot = member === BOT_NAME;
     const isOnline = isBot || users.includes(member);
     const isMe = member === username;
-    const avatar = isBot ? '🤖' : escapeHtml(member.charAt(0).toUpperCase());
+    const avatar = isBot ? '🤖' : getAvatarEmoji(member);
     
     return `
       <div class="member-item ${isMe ? 'me' : ''}">
@@ -110,6 +129,7 @@ function displayMessage(message) {
   
   const isSent = message.username === username;
   const isBot = message.username === BOT_NAME;
+  const avatar = isBot ? '🤖' : getAvatarEmoji(message.username);
   messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
   if (message.id) {
     messageDiv.dataset.msgId = message.id;
@@ -135,9 +155,12 @@ function displayMessage(message) {
   }
   
   messageDiv.innerHTML = `
-    <div class="message-username">${displayName}</div>
-    <div class="message-content">${contentHtml}</div>
-    <div class="message-time">${timeStr}</div>
+    <div class="message-avatar">${avatar}</div>
+    <div class="message-body">
+      <div class="message-username">${displayName}</div>
+      <div class="message-content">${contentHtml}</div>
+      <div class="message-time">${timeStr}</div>
+    </div>
   `;
   
   container.appendChild(messageDiv);
