@@ -389,13 +389,13 @@ async function generateQRCode() {
   qrcodeEl.innerHTML = '';
   try {
     if (window.QRCode) {
-      new window.QRCode(qrcodeEl, {
+      new QRCode(qrcodeEl, {
         text: getShareUrl(),
         width: 180,
         height: 180,
         colorDark: '#000000',
         colorLight: '#ffffff',
-        correctLevel: window.QRCode.CorrectLevel.H
+        correctLevel: QRCode.CorrectLevel.H
       });
     }
   } catch (e) {
@@ -408,7 +408,7 @@ function openShareModal() {
   document.getElementById('shareCardRoomId').textContent = `Room ID: ${currentRoomId}`;
   document.getElementById('shareCardOnline').textContent = `👥 ${onlineUsers.length} 人在线`;
   document.getElementById('shareModal').classList.remove('hidden');
-  setTimeout(generateQRCode, 50);
+  setTimeout(generateQRCode, 150);
 }
 
 function closeShareModal() {
