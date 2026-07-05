@@ -21,6 +21,7 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
 const BOT_NAME = '小助手';
 
 let tvly = null;
@@ -30,6 +31,39 @@ if (TAVILY_API_KEY) {
 
 let messages = [];
 let users = new Map();
+
+// Firebase 消息持久化
+async function saveMessageToFirebase(msg) {
+  try {
+    await fetch(`${FIREBASE_DB_URL}/messages.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(msg)
+    });
+  } catch (err) {
+    console.error('Firebase 保存失败:', err);
+  }
+}
+
+async function loadMessagesFromFirebase() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/messages.json?limitToLast=100`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data) return [];
+    const arr = Object.values(data);
+    return arr.sort((a, b) => a.timestamp - b.timestamp);
+  } catch (err) {
+    console.error('Firebase 加载失败:', err);
+    return [];
+  }
+}
+
+// 启动时加载历史消息
+loadMessagesFromFirebase().then(history => {
+  messages = history;
+  console.log(`已从 Firebase 加载 ${history.length} 条历史消息`);
+});
 
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
@@ -52,6 +86,7 @@ io.on('connection', (socket) => {
     };
     messages.push(systemMsg);
     if (messages.length > 500) messages = messages.slice(-500);
+    saveMessageToFirebase(systemMsg);
     io.emit('message', systemMsg);
   });
 
@@ -67,6 +102,7 @@ io.on('connection', (socket) => {
     
     messages.push(msg);
     if (messages.length > 500) messages = messages.slice(-500);
+    saveMessageToFirebase(msg);
     io.emit('message', msg);
 
     if (shouldTriggerBot(data.text, username)) {
@@ -89,6 +125,7 @@ io.on('connection', (socket) => {
       };
       messages.push(systemMsg);
       if (messages.length > 500) messages = messages.slice(-500);
+      saveMessageToFirebase(systemMsg);
       io.emit('message', systemMsg);
     }
     console.log('用户断开:', socket.id);
@@ -170,6 +207,7 @@ async function handleBotReply(userText, fromUser) {
     
     messages.push(botMsg);
     if (messages.length > 500) messages = messages.slice(-500);
+    saveMessageToFirebase(botMsg);
     io.emit('message', botMsg);
   } catch (error) {
     console.error('机器人回复失败:', error);
@@ -185,6 +223,7 @@ async function handleBotReply(userText, fromUser) {
     
     messages.push(errorMsg);
     if (messages.length > 500) messages = messages.slice(-500);
+    saveMessageToFirebase(errorMsg);
     io.emit('message', errorMsg);
   }
 }
@@ -230,7 +269,7 @@ async function callDeepSeekAPI(messages, searchResults = null) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', onlineUsers: users.size, hasDeepSeekKey: !!DEEPSEEK_API_KEY, hasTavilyKey: !!TAVILY_API_KEY });
+  res.json({ status: 'ok', onlineUsers: users.size, hasDeepSeekKey: !!DEEPSEEK_API_KEY, hasTavilyKey: !!TAVILY_API_KEY, firebaseEnabled: !!FIREBASE_DB_URL });
 });
 
 server.listen(PORT, () => {
