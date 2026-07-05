@@ -65,10 +65,6 @@ function joinChat() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatScreen').classList.remove('hidden');
   
-  if (!socket) {
-    connectSocket();
-  }
-  
   socket.emit('join', name);
   
   document.getElementById('messageInput').focus();
@@ -297,4 +293,6 @@ window.addEventListener('load', () => {
   if (savedUsername) {
     document.getElementById('usernameInput').value = savedUsername;
   }
+  
+  connectSocket();
 });
