@@ -78,7 +78,7 @@ async function saveMessageToFirebase(roomId, msg) {
 
 async function loadMessagesFromFirebase(roomId) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=100`);
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=50`);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
@@ -132,7 +132,7 @@ io.on('connection', (socket) => {
     io.to(finalRoomId).emit('userList', userList);
 
     // 发送历史消息给新加入的用户
-    socket.emit('history', room.messages.slice(-100));
+    socket.emit('history', room.messages.slice(-20));
 
     const systemMsg = {
       id: Date.now() + Math.random(),
