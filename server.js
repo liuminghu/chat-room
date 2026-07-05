@@ -145,23 +145,29 @@ io.on('connection', (socket) => {
     saveMessageToFirebase(finalRoomId, systemMsg);
     io.to(finalRoomId).emit('message', systemMsg);
 
-    // 机器人欢迎
-    setTimeout(() => {
-      const welcomeMsg = {
-        id: Date.now() + Math.random(),
-        type: 'message',
-        username: BOT_NAME,
-        text: `@${finalUsername} 欢迎来到房间 ${finalRoomId}！有什么问题可以随时问我哦~ 😊`,
-        timestamp: Date.now()
-      };
-      const currentRoom = rooms.get(finalRoomId);
-      if (currentRoom) {
-        currentRoom.messages.push(welcomeMsg);
-        if (currentRoom.messages.length > 500) currentRoom.messages = currentRoom.messages.slice(-500);
-        saveMessageToFirebase(finalRoomId, welcomeMsg);
-        io.to(finalRoomId).emit('message', welcomeMsg);
-      }
-    }, 500);
+    // 机器人欢迎（只欢迎第一次进入房间的用户）
+    const isNewUser = !room.messages.some(
+      m => m.username === finalUsername || (m.type === 'system' && m.text.startsWith(`${finalUsername} `))
+    );
+
+    if (isNewUser) {
+      setTimeout(() => {
+        const welcomeMsg = {
+          id: Date.now() + Math.random(),
+          type: 'message',
+          username: BOT_NAME,
+          text: `@${finalUsername} 欢迎来到房间 ${finalRoomId}！有什么问题可以随时问我哦~ 😊`,
+          timestamp: Date.now()
+        };
+        const currentRoom = rooms.get(finalRoomId);
+        if (currentRoom) {
+          currentRoom.messages.push(welcomeMsg);
+          if (currentRoom.messages.length > 500) currentRoom.messages = currentRoom.messages.slice(-500);
+          saveMessageToFirebase(finalRoomId, welcomeMsg);
+          io.to(finalRoomId).emit('message', welcomeMsg);
+        }
+      }, 500);
+    }
   });
 
   socket.on('message', async (data) => {
