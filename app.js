@@ -1,11 +1,11 @@
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCaScHr69e9DCuryeTj0upmhgzQZDTGOdI",
+  authDomain: "chat-room-demo-e837c.firebaseapp.com",
+  databaseURL: "https://chat-room-demo-e837c-default-rtdb.firebaseio.com",
+  projectId: "chat-room-demo-e837c",
+  storageBucket: "chat-room-demo-e837c.firebasestorage.app",
+  messagingSenderId: "503903612427",
+  appId: "1:503903612427:web:cfe6ba1a23779e5343a10e"
 };
 
 let username = '';
