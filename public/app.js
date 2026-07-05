@@ -251,7 +251,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-document.getElementById('joinBtn').addEventListener('click', joinChat);
+document.getElementById('joinBtn').addEventListener('click', () => joinChat());
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
 document.getElementById('usernameInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
@@ -307,7 +307,7 @@ window.addEventListener('load', () => {
 
 function joinChat(name) {
   const input = document.getElementById('usernameInput');
-  const nameToUse = name || input.value.trim();
+  const nameToUse = (typeof name === 'string' && name) || input.value.trim();
   
   if (!nameToUse) {
     input.focus();
