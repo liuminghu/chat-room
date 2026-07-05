@@ -33,17 +33,34 @@ if (TAVILY_API_KEY) {
   tvly = tavily({ apiKey: TAVILY_API_KEY });
 }
 
-// 房间数据：roomId -> { messages: [], users: Map(socketId -> username) }
+// 房间数据：roomId -> { messages: [], users: Map(socketId -> username), loaded: boolean }
 const rooms = new Map();
+const roomLoadPromises = new Map();
 
-function getRoom(roomId) {
-  if (!rooms.has(roomId)) {
-    rooms.set(roomId, {
-      messages: [],
-      users: new Map()
-    });
+async function getOrLoadRoom(roomId) {
+  if (rooms.has(roomId)) {
+    return rooms.get(roomId);
   }
-  return rooms.get(roomId);
+
+  if (roomLoadPromises.has(roomId)) {
+    return roomLoadPromises.get(roomId);
+  }
+
+  const loadPromise = (async () => {
+    const history = await loadMessagesFromFirebase(roomId);
+    const room = {
+      messages: history,
+      users: new Map(),
+      loaded: true
+    };
+    rooms.set(roomId, room);
+    roomLoadPromises.delete(roomId);
+    console.log(`房间 ${roomId} 已从 Firebase 加载 ${history.length} 条历史消息`);
+    return room;
+  })();
+
+  roomLoadPromises.set(roomId, loadPromise);
+  return loadPromise;
 }
 
 // Firebase 消息持久化（按房间区分）
@@ -76,7 +93,7 @@ async function loadMessagesFromFirebase(roomId) {
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
-  socket.on('join', ({ roomId, username }) => {
+  socket.on('join', async ({ roomId, username }) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
     const finalUsername = (username && username.trim()) || '匿名';
 
@@ -105,7 +122,7 @@ io.on('connection', (socket) => {
       socket.leave(r);
     });
 
-    const room = getRoom(finalRoomId);
+    const room = await getOrLoadRoom(finalRoomId);
     room.users.set(socket.id, finalUsername);
     socket.join(finalRoomId);
     socket.roomId = finalRoomId;
@@ -228,7 +245,8 @@ async function searchWeb(query) {
 
 // 每个房间独立的机器人对话历史
 function getBotHistory(roomId) {
-  const room = getRoom(roomId);
+  const room = rooms.get(roomId);
+  if (!room) return [];
   if (!room.botHistory) room.botHistory = [];
   return room.botHistory;
 }
