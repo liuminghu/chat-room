@@ -71,26 +71,6 @@ function updateUserStatus(status) {
   document.getElementById('userStatus').textContent = status;
 }
 
-function joinChat() {
-  const input = document.getElementById('usernameInput');
-  const name = input.value.trim();
-  
-  if (!name) {
-    input.focus();
-    return;
-  }
-  
-  username = name;
-  localStorage.setItem('chat_username', name);
-  
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('chatScreen').classList.remove('hidden');
-  
-  socket.emit('join', name);
-  
-  document.getElementById('messageInput').focus();
-}
-
 function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
@@ -317,4 +297,30 @@ window.addEventListener('load', () => {
   }
   
   connectSocket();
+  
+  socket.on('connect', () => {
+    if (savedUsername) {
+      joinChat(savedUsername);
+    }
+  });
 });
+
+function joinChat(name) {
+  const input = document.getElementById('usernameInput');
+  const nameToUse = name || input.value.trim();
+  
+  if (!nameToUse) {
+    input.focus();
+    return;
+  }
+  
+  username = nameToUse;
+  localStorage.setItem('chat_username', nameToUse);
+  
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  
+  socket.emit('join', nameToUse);
+  
+  document.getElementById('messageInput').focus();
+}
