@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时聊天室</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>💬 实时聊天室</h1>
+      <div id="userStatus" class="user-status">未连接</div>
+    </header>
+
+    <div id="loginScreen" class="login-screen">
+      <h2>加入聊天</h2>
+      <input type="text" id="usernameInput" placeholder="输入你的昵称" maxlength="20">
+      <button id="joinBtn">加入聊天室</button>
+    </div>
+
+    <div id="chatScreen" class="chat-screen hidden">
+      <div id="messagesContainer" class="messages-container"></div>
+      
+      <div class="input-area">
+        <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500">
+        <button id="sendBtn">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
