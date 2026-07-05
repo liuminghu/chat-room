@@ -178,7 +178,8 @@ async function callDeepSeekAPI(messages) {
   });
 
   if (!response.ok) {
-    throw new Error('API 请求失败: ' + response.status);
+    const errorText = await response.text();
+    throw new Error(`API 请求失败: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
