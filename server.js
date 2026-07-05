@@ -145,7 +145,7 @@ async function handleBotReply(userText, fromUser) {
       id: Date.now() + Math.random(),
       type: 'message',
       username: BOT_NAME,
-      text: '抱歉，我遇到了一点小问题，请稍后再试～',
+      text: `抱歉，我遇到了一点小问题: ${error.message}`,
       timestamp: Date.now()
     };
     
@@ -186,7 +186,7 @@ async function callDeepSeekAPI(messages) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', onlineUsers: users.size });
+  res.json({ status: 'ok', onlineUsers: users.size, hasApiKey: !!DEEPSEEK_API_KEY });
 });
 
 server.listen(PORT, () => {
