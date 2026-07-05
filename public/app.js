@@ -43,7 +43,28 @@ function connectSocket() {
 
   socket.on('userList', (users) => {
     onlineUsers = users;
+    renderMembersList(users);
   });
+}
+
+function renderMembersList(users) {
+  const membersList = document.getElementById('membersList');
+  const allMembers = [BOT_NAME, ...users].filter((u, i, arr) => arr.indexOf(u) === i);
+  
+  membersList.innerHTML = allMembers.map(member => {
+    const isBot = member === BOT_NAME;
+    const isOnline = isBot || users.includes(member);
+    const isMe = member === username;
+    const avatar = isBot ? '🤖' : escapeHtml(member.charAt(0).toUpperCase());
+    
+    return `
+      <div class="member-item ${isMe ? 'me' : ''}">
+        <span class="member-avatar">${avatar}</span>
+        <span class="member-name">${isMe ? '我' : escapeHtml(member)}</span>
+        <span class="member-status ${isOnline ? 'online' : ''}"></span>
+      </div>
+    `;
+  }).join('');
 }
 
 function updateUserStatus(status) {

@@ -100,7 +100,84 @@ body {
 .chat-screen {
   flex: 1;
   display: flex;
+}
+
+.chat-content {
+  flex: 1;
+  display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.members-sidebar {
+  width: 200px;
+  background: #f8f9fa;
+  border-left: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.members-sidebar h3 {
+  font-size: 14px;
+  color: #666;
+  padding: 16px;
+  margin: 0;
+  border-bottom: 1px solid #eee;
+  font-weight: 600;
+}
+
+.members-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.member-item:hover {
+  background: #e9ecef;
+}
+
+.member-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.member-name {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+}
+
+.member-status.online {
+  background: #10b981;
 }
 
 .messages-container {
@@ -339,6 +416,26 @@ body {
     height: 100vh;
     max-height: none;
     border-radius: 0;
+  }
+
+  .member-item .member-name {
+    display: none;
+  }
+
+  .member-item {
+    justify-content: center;
+  }
+
+  .members-sidebar {
+    width: 60px;
+  }
+
+  .members-sidebar h3 {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 12px 8px;
+    font-size: 12px;
+    text-align: center;
   }
 
   .message {

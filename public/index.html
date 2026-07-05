@@ -20,14 +20,27 @@
     </div>
 
     <div id="chatScreen" class="chat-screen hidden">
-      <div id="messagesContainer" class="messages-container"></div>
-      
-      <div class="input-area">
-        <div class="input-wrapper">
-          <input type="text" id="messageInput" placeholder="输入消息...  输入 @ 可以艾特别人" maxlength="500">
-          <div id="mentionList" class="mention-list hidden"></div>
+      <div class="chat-content">
+        <div id="messagesContainer" class="messages-container"></div>
+        
+        <div class="input-area">
+          <div class="input-wrapper">
+            <input type="text" id="messageInput" placeholder="输入消息...  输入 @ 可以艾特别人" maxlength="500">
+            <div id="mentionList" class="mention-list hidden"></div>
+          </div>
+          <button id="sendBtn">发送</button>
         </div>
-        <button id="sendBtn">发送</button>
+      </div>
+      
+      <div id="membersSidebar" class="members-sidebar">
+        <h3>👥 群成员</h3>
+        <div id="membersList" class="members-list">
+          <div class="member-item">
+            <span class="member-avatar">🤖</span>
+            <span class="member-name">小助手</span>
+            <span class="member-status online"></span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

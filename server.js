@@ -29,12 +29,12 @@ io.on('connection', (socket) => {
 
   socket.emit('history', messages.slice(-100));
   
-  const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
+  const userList = Array.from(new Set(users.values()));
   socket.emit('userList', userList);
 
   socket.on('join', (username) => {
     users.set(socket.id, username);
-    const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
+    const userList = Array.from(new Set(users.values()));
     io.emit('userList', userList);
     
     const systemMsg = {
@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
     const username = users.get(socket.id);
     if (username) {
       users.delete(socket.id);
-      const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
+      const userList = Array.from(new Set(users.values()));
       io.emit('userList', userList);
       
       const systemMsg = {
