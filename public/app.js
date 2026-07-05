@@ -171,7 +171,8 @@ function formatMessageWithMentions(text) {
 
 function showMentionList(query) {
   const mentionList = document.getElementById('mentionList');
-  const users = onlineUsers.filter(u => 
+  const allUsers = [BOT_NAME, ...onlineUsers].filter((u, i, arr) => arr.indexOf(u) === i);
+  const users = allUsers.filter(u => 
     u !== username && u.toLowerCase().includes(query.toLowerCase())
   );
   
