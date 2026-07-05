@@ -28,10 +28,13 @@ io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
   socket.emit('history', messages.slice(-100));
+  
+  const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
+  socket.emit('userList', userList);
 
   socket.on('join', (username) => {
     users.set(socket.id, username);
-    const userList = Array.from(new Set(users.values()));
+    const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
     io.emit('userList', userList);
     
     const systemMsg = {
@@ -68,7 +71,7 @@ io.on('connection', (socket) => {
     const username = users.get(socket.id);
     if (username) {
       users.delete(socket.id);
-      const userList = Array.from(new Set(users.values()));
+      const userList = Array.from(new Set(users.values())).concat(BOT_NAME);
       io.emit('userList', userList);
       
       const systemMsg = {
