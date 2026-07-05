@@ -88,6 +88,20 @@ io.on('connection', (socket) => {
     if (messages.length > 500) messages = messages.slice(-500);
     saveMessageToFirebase(systemMsg);
     io.emit('message', systemMsg);
+
+    setTimeout(() => {
+      const welcomeMsg = {
+        id: Date.now() + Math.random(),
+        type: 'message',
+        username: BOT_NAME,
+        text: `@${username} 欢迎你加入聊天室！有什么问题可以随时问我哦~ 😊`,
+        timestamp: Date.now()
+      };
+      messages.push(welcomeMsg);
+      if (messages.length > 500) messages = messages.slice(-500);
+      saveMessageToFirebase(welcomeMsg);
+      io.emit('message', welcomeMsg);
+    }, 500);
   });
 
   socket.on('message', async (data) => {
