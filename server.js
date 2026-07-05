@@ -23,19 +23,30 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
 const BOT_NAME = '小助手';
+const DEFAULT_ROOM = 'public';
 
 let tvly = null;
 if (TAVILY_API_KEY) {
   tvly = tavily({ apiKey: TAVILY_API_KEY });
 }
 
-let messages = [];
-let users = new Map();
+// 房间数据：roomId -> { messages: [], users: Map(socketId -> username) }
+const rooms = new Map();
 
-// Firebase 消息持久化
-async function saveMessageToFirebase(msg) {
+function getRoom(roomId) {
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, {
+      messages: [],
+      users: new Map()
+    });
+  }
+  return rooms.get(roomId);
+}
+
+// Firebase 消息持久化（按房间区分）
+async function saveMessageToFirebase(roomId, msg) {
   try {
-    await fetch(`${FIREBASE_DB_URL}/messages.json`, {
+    await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg)
@@ -45,9 +56,9 @@ async function saveMessageToFirebase(msg) {
   }
 }
 
-async function loadMessagesFromFirebase() {
+async function loadMessagesFromFirebase(roomId) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/messages.json?limitToLast=100`);
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=100`);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
@@ -59,53 +70,87 @@ async function loadMessagesFromFirebase() {
   }
 }
 
-// 启动时加载历史消息
-loadMessagesFromFirebase().then(history => {
-  messages = history;
-  console.log(`已从 Firebase 加载 ${history.length} 条历史消息`);
-});
-
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
-  socket.emit('history', messages.slice(-100));
-  
-  const userList = Array.from(new Set(users.values()));
-  socket.emit('userList', userList);
+  socket.on('join', ({ roomId, username }) => {
+    const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
+    const finalUsername = (username && username.trim()) || '匿名';
 
-  socket.on('join', (username) => {
-    users.set(socket.id, username);
-    const userList = Array.from(new Set(users.values()));
-    io.emit('userList', userList);
-    
+    // 离开之前加入的房间
+    const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
+    previousRooms.forEach(r => {
+      const prevRoom = rooms.get(r);
+      if (prevRoom) {
+        const prevName = prevRoom.users.get(socket.id);
+        prevRoom.users.delete(socket.id);
+        const prevUserList = Array.from(new Set(prevRoom.users.values()));
+        io.to(r).emit('userList', prevUserList);
+        if (prevName) {
+          const leaveMsg = {
+            id: Date.now() + Math.random(),
+            type: 'system',
+            text: `${prevName} 离开了聊天室`,
+            timestamp: Date.now()
+          };
+          prevRoom.messages.push(leaveMsg);
+          if (prevRoom.messages.length > 500) prevRoom.messages = prevRoom.messages.slice(-500);
+          saveMessageToFirebase(r, leaveMsg);
+          io.to(r).emit('message', leaveMsg);
+        }
+      }
+      socket.leave(r);
+    });
+
+    const room = getRoom(finalRoomId);
+    room.users.set(socket.id, finalUsername);
+    socket.join(finalRoomId);
+    socket.roomId = finalRoomId;
+    socket.username = finalUsername;
+
+    const userList = Array.from(new Set(room.users.values()));
+    io.to(finalRoomId).emit('userList', userList);
+
+    // 发送历史消息给新加入的用户
+    socket.emit('history', room.messages.slice(-100));
+
     const systemMsg = {
       id: Date.now() + Math.random(),
       type: 'system',
-      text: `${username} 加入了聊天室`,
+      text: `${finalUsername} 加入了聊天室`,
       timestamp: Date.now()
     };
-    messages.push(systemMsg);
-    if (messages.length > 500) messages = messages.slice(-500);
-    saveMessageToFirebase(systemMsg);
-    io.emit('message', systemMsg);
+    room.messages.push(systemMsg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    saveMessageToFirebase(finalRoomId, systemMsg);
+    io.to(finalRoomId).emit('message', systemMsg);
 
+    // 机器人欢迎
     setTimeout(() => {
       const welcomeMsg = {
         id: Date.now() + Math.random(),
         type: 'message',
         username: BOT_NAME,
-        text: `@${username} 欢迎你加入聊天室！有什么问题可以随时问我哦~ 😊`,
+        text: `@${finalUsername} 欢迎来到房间 ${finalRoomId}！有什么问题可以随时问我哦~ 😊`,
         timestamp: Date.now()
       };
-      messages.push(welcomeMsg);
-      if (messages.length > 500) messages = messages.slice(-500);
-      saveMessageToFirebase(welcomeMsg);
-      io.emit('message', welcomeMsg);
+      const currentRoom = rooms.get(finalRoomId);
+      if (currentRoom) {
+        currentRoom.messages.push(welcomeMsg);
+        if (currentRoom.messages.length > 500) currentRoom.messages = currentRoom.messages.slice(-500);
+        saveMessageToFirebase(finalRoomId, welcomeMsg);
+        io.to(finalRoomId).emit('message', welcomeMsg);
+      }
     }, 500);
   });
 
   socket.on('message', async (data) => {
-    const username = users.get(socket.id) || '匿名';
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const username = room.users.get(socket.id) || '匿名';
     const msg = {
       id: Date.now() + Math.random(),
       type: 'message',
@@ -113,34 +158,38 @@ io.on('connection', (socket) => {
       text: data.text,
       timestamp: Date.now()
     };
-    
-    messages.push(msg);
-    if (messages.length > 500) messages = messages.slice(-500);
-    saveMessageToFirebase(msg);
-    io.emit('message', msg);
+
+    room.messages.push(msg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    saveMessageToFirebase(roomId, msg);
+    io.to(roomId).emit('message', msg);
 
     if (shouldTriggerBot(data.text, username)) {
-      await handleBotReply(data.text, username);
+      await handleBotReply(roomId, data.text, username);
     }
   });
 
   socket.on('disconnect', () => {
-    const username = users.get(socket.id);
-    if (username) {
-      users.delete(socket.id);
-      const userList = Array.from(new Set(users.values()));
-      io.emit('userList', userList);
-      
-      const systemMsg = {
-        id: Date.now() + Math.random(),
-        type: 'system',
-        text: `${username} 离开了聊天室`,
-        timestamp: Date.now()
-      };
-      messages.push(systemMsg);
-      if (messages.length > 500) messages = messages.slice(-500);
-      saveMessageToFirebase(systemMsg);
-      io.emit('message', systemMsg);
+    const roomId = socket.roomId;
+    const username = socket.username;
+    if (roomId && username) {
+      const room = rooms.get(roomId);
+      if (room) {
+        room.users.delete(socket.id);
+        const userList = Array.from(new Set(room.users.values()));
+        io.to(roomId).emit('userList', userList);
+
+        const systemMsg = {
+          id: Date.now() + Math.random(),
+          type: 'system',
+          text: `${username} 离开了聊天室`,
+          timestamp: Date.now()
+        };
+        room.messages.push(systemMsg);
+        if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+        saveMessageToFirebase(roomId, systemMsg);
+        io.to(roomId).emit('message', systemMsg);
+      }
     }
     console.log('用户断开:', socket.id);
   });
@@ -174,18 +223,24 @@ async function searchWeb(query) {
   }
 }
 
-let botConversationHistory = [];
+// 每个房间独立的机器人对话历史
+function getBotHistory(roomId) {
+  const room = getRoom(roomId);
+  if (!room.botHistory) room.botHistory = [];
+  return room.botHistory;
+}
 
-async function handleBotReply(userText, fromUser) {
+async function handleBotReply(roomId, userText, fromUser) {
   const cleanText = userText.replace(/@小助手/g, '').trim();
-  
+  const botConversationHistory = getBotHistory(roomId);
+
   botConversationHistory.push({
     role: 'user',
     content: `[${fromUser}]: ${cleanText}`
   });
-  
+
   if (botConversationHistory.length > 20) {
-    botConversationHistory = botConversationHistory.slice(-20);
+    botConversationHistory.splice(0, botConversationHistory.length - 20);
   }
 
   const typingMsg = {
@@ -194,22 +249,22 @@ async function handleBotReply(userText, fromUser) {
     username: BOT_NAME,
     timestamp: Date.now()
   };
-  io.emit('message', typingMsg);
+  io.to(roomId).emit('message', typingMsg);
 
   try {
     let searchResults = null;
     if (needsWebSearch(cleanText)) {
       searchResults = await searchWeb(cleanText);
     }
-    
+
     const response = await callDeepSeekAPI(botConversationHistory, searchResults, fromUser);
-    
+
     botConversationHistory.push({
       role: 'assistant',
       content: response
     });
 
-    io.emit('removeTyping', typingMsg.id);
+    io.to(roomId).emit('removeTyping', typingMsg.id);
 
     const botMsg = {
       id: Date.now() + Math.random(),
@@ -218,15 +273,18 @@ async function handleBotReply(userText, fromUser) {
       text: `@${fromUser} ${response}`,
       timestamp: Date.now()
     };
-    
-    messages.push(botMsg);
-    if (messages.length > 500) messages = messages.slice(-500);
-    saveMessageToFirebase(botMsg);
-    io.emit('message', botMsg);
+
+    const room = rooms.get(roomId);
+    if (room) {
+      room.messages.push(botMsg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(roomId, botMsg);
+    }
+    io.to(roomId).emit('message', botMsg);
   } catch (error) {
     console.error('机器人回复失败:', error);
-    io.emit('removeTyping', typingMsg.id);
-    
+    io.to(roomId).emit('removeTyping', typingMsg.id);
+
     const errorMsg = {
       id: Date.now() + Math.random(),
       type: 'message',
@@ -234,11 +292,14 @@ async function handleBotReply(userText, fromUser) {
       text: `@${fromUser} 抱歉，我遇到了一点小问题: ${error.message}`,
       timestamp: Date.now()
     };
-    
-    messages.push(errorMsg);
-    if (messages.length > 500) messages = messages.slice(-500);
-    saveMessageToFirebase(errorMsg);
-    io.emit('message', errorMsg);
+
+    const room = rooms.get(roomId);
+    if (room) {
+      room.messages.push(errorMsg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(roomId, errorMsg);
+    }
+    io.to(roomId).emit('message', errorMsg);
   }
 }
 
@@ -286,7 +347,13 @@ async function callDeepSeekAPI(messages, searchResults = null, fromUser = '') {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', onlineUsers: users.size, hasDeepSeekKey: !!DEEPSEEK_API_KEY, hasTavilyKey: !!TAVILY_API_KEY, firebaseEnabled: !!FIREBASE_DB_URL });
+  res.json({
+    status: 'ok',
+    rooms: rooms.size,
+    hasDeepSeekKey: !!DEEPSEEK_API_KEY,
+    hasTavilyKey: !!TAVILY_API_KEY,
+    firebaseEnabled: !!FIREBASE_DB_URL
+  });
 });
 
 server.listen(PORT, () => {

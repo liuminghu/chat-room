@@ -9,12 +9,13 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1>💬 实时聊天室</h1>
+      <h1>💬 实时聊天室 <span id="roomBadge" class="room-badge hidden"></span></h1>
       <div id="userStatus" class="user-status">未连接</div>
     </header>
 
     <div id="loginScreen" class="login-screen">
       <h2>加入聊天</h2>
+      <input type="text" id="roomIdInput" placeholder="房间ID（相同ID进入同一房间）" maxlength="30">
       <input type="text" id="usernameInput" placeholder="输入你的昵称" maxlength="20">
       <button id="joinBtn">加入聊天室</button>
     </div>

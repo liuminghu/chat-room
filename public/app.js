@@ -20,6 +20,7 @@ function getAvatarEmoji(name) {
 }
 
 let username = '';
+let currentRoomId = '';
 let socket = null;
 let onlineUsers = [];
 let mentionStartPos = -1;
@@ -279,6 +280,9 @@ document.getElementById('sendBtn').addEventListener('click', sendMessage);
 document.getElementById('usernameInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
 });
+document.getElementById('roomIdInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') joinChat();
+});
 
 const messageInput = document.getElementById('messageInput');
 messageInput.addEventListener('input', handleMentionInput);
@@ -315,35 +319,54 @@ messageInput.addEventListener('focus', handleMentionInput);
 
 window.addEventListener('load', () => {
   const savedUsername = localStorage.getItem('chat_username');
+  const savedRoomId = localStorage.getItem('chat_room_id');
   if (savedUsername) {
     document.getElementById('usernameInput').value = savedUsername;
   }
-  
+  if (savedRoomId) {
+    document.getElementById('roomIdInput').value = savedRoomId;
+  }
+
   connectSocket();
-  
+
   socket.on('connect', () => {
-    if (savedUsername) {
-      joinChat(savedUsername);
+    if (savedUsername && savedRoomId) {
+      joinChat(savedUsername, savedRoomId);
     }
   });
 });
 
-function joinChat(name) {
-  const input = document.getElementById('usernameInput');
-  const nameToUse = (typeof name === 'string' && name) || input.value.trim();
-  
+function joinChat(name, roomId) {
+  const usernameInput = document.getElementById('usernameInput');
+  const roomIdInput = document.getElementById('roomIdInput');
+  const nameToUse = (typeof name === 'string' && name) || usernameInput.value.trim();
+  const roomIdToUse = (typeof roomId === 'string' && roomId) || roomIdInput.value.trim();
+
   if (!nameToUse) {
-    input.focus();
+    usernameInput.focus();
     return;
   }
-  
+  if (!roomIdToUse) {
+    roomIdInput.focus();
+    return;
+  }
+
   username = nameToUse;
+  currentRoomId = roomIdToUse;
   localStorage.setItem('chat_username', nameToUse);
-  
+  localStorage.setItem('chat_room_id', roomIdToUse);
+
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatScreen').classList.remove('hidden');
-  
-  socket.emit('join', nameToUse);
-  
+
+  const roomBadge = document.getElementById('roomBadge');
+  roomBadge.textContent = `#${roomIdToUse}`;
+  roomBadge.classList.remove('hidden');
+
+  document.getElementById('messagesContainer').innerHTML = '';
+  onlineUsers = [];
+
+  socket.emit('join', { roomId: roomIdToUse, username: nameToUse });
+
   document.getElementById('messageInput').focus();
 }
