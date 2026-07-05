@@ -107,6 +107,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+  min-width: 0;
 }
 
 .members-sidebar {
@@ -185,6 +187,7 @@ body {
   padding: 20px;
   overflow-y: auto;
   background: #f7f8fa;
+  min-height: 0;
 }
 
 .message {
