@@ -320,18 +320,23 @@ messageInput.addEventListener('focus', handleMentionInput);
 window.addEventListener('load', () => {
   const savedUsername = localStorage.getItem('chat_username');
   const savedRoomId = localStorage.getItem('chat_room_id');
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlRoomId = urlParams.get('room');
+
   if (savedUsername) {
     document.getElementById('usernameInput').value = savedUsername;
   }
-  if (savedRoomId) {
-    document.getElementById('roomIdInput').value = savedRoomId;
+
+  const initialRoomId = urlRoomId || savedRoomId;
+  if (initialRoomId) {
+    document.getElementById('roomIdInput').value = initialRoomId;
   }
 
   connectSocket();
 
   socket.on('connect', () => {
-    if (savedUsername && savedRoomId) {
-      joinChat(savedUsername, savedRoomId);
+    if (savedUsername && initialRoomId) {
+      joinChat(savedUsername, initialRoomId);
     }
   });
 });
@@ -363,6 +368,8 @@ function joinChat(name, roomId) {
   roomBadge.textContent = `#${roomIdToUse}`;
   roomBadge.classList.remove('hidden');
 
+  document.getElementById('shareBtn').classList.remove('hidden');
+
   document.getElementById('messagesContainer').innerHTML = '';
   onlineUsers = [];
 
@@ -370,3 +377,113 @@ function joinChat(name, roomId) {
 
   document.getElementById('messageInput').focus();
 }
+
+function getShareUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('room', currentRoomId);
+  return url.toString();
+}
+
+async function generateQRCode() {
+  const qrcodeEl = document.getElementById('qrcode');
+  qrcodeEl.innerHTML = '';
+  try {
+    if (window.QRCode) {
+      new window.QRCode(qrcodeEl, {
+        text: getShareUrl(),
+        width: 180,
+        height: 180,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: window.QRCode.CorrectLevel.H
+      });
+    }
+  } catch (e) {
+    console.error('二维码生成失败:', e);
+  }
+}
+
+function openShareModal() {
+  document.getElementById('shareCardRoom').textContent = currentRoomId;
+  document.getElementById('shareCardRoomId').textContent = `Room ID: ${currentRoomId}`;
+  document.getElementById('shareCardOnline').textContent = `👥 ${onlineUsers.length} 人在线`;
+  document.getElementById('shareModal').classList.remove('hidden');
+  setTimeout(generateQRCode, 50);
+}
+
+function closeShareModal() {
+  document.getElementById('shareModal').classList.add('hidden');
+}
+
+function copyShareLink() {
+  const url = getShareUrl();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('链接已复制到剪贴板');
+    }).catch(() => {
+      fallbackCopy(url);
+    });
+  } else {
+    fallbackCopy(url);
+  }
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showToast('链接已复制到剪贴板');
+  } catch (e) {
+    showToast('复制失败，请手动复制');
+  }
+  document.body.removeChild(textarea);
+}
+
+async function saveShareImage() {
+  const card = document.getElementById('shareCard');
+  try {
+    if (window.html2canvas) {
+      const canvas = await html2canvas(card, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true
+      });
+      const link = document.createElement('a');
+      link.download = `分享卡片-${currentRoomId}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('图片已保存');
+    } else {
+      showToast('图片保存功能暂不可用');
+    }
+  } catch (e) {
+    console.error('保存图片失败:', e);
+    showToast('保存图片失败');
+  }
+}
+
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2000);
+}
+
+document.getElementById('shareBtn').addEventListener('click', openShareModal);
+document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
+document.querySelector('.share-modal-overlay').addEventListener('click', closeShareModal);
+document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
+document.getElementById('saveImageBtn').addEventListener('click', saveShareImage);
