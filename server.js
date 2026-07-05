@@ -167,7 +167,7 @@ async function handleBotReply(userText, fromUser) {
   
   botConversationHistory.push({
     role: 'user',
-    content: cleanText
+    content: `[${fromUser}]: ${cleanText}`
   });
   
   if (botConversationHistory.length > 20) {
@@ -188,7 +188,7 @@ async function handleBotReply(userText, fromUser) {
       searchResults = await searchWeb(cleanText);
     }
     
-    const response = await callDeepSeekAPI(botConversationHistory, searchResults);
+    const response = await callDeepSeekAPI(botConversationHistory, searchResults, fromUser);
     
     botConversationHistory.push({
       role: 'assistant',
@@ -201,7 +201,7 @@ async function handleBotReply(userText, fromUser) {
       id: Date.now() + Math.random(),
       type: 'message',
       username: BOT_NAME,
-      text: response,
+      text: `@${fromUser} ${response}`,
       timestamp: Date.now()
     };
     
@@ -217,7 +217,7 @@ async function handleBotReply(userText, fromUser) {
       id: Date.now() + Math.random(),
       type: 'message',
       username: BOT_NAME,
-      text: `抱歉，我遇到了一点小问题: ${error.message}`,
+      text: `@${fromUser} 抱歉，我遇到了一点小问题: ${error.message}`,
       timestamp: Date.now()
     };
     
@@ -228,11 +228,14 @@ async function handleBotReply(userText, fromUser) {
   }
 }
 
-async function callDeepSeekAPI(messages, searchResults = null) {
+async function callDeepSeekAPI(messages, searchResults = null, fromUser = '') {
   let systemContent = '你是一个友好的群聊助手，叫"小助手"。请用简洁、亲切的语气回答问题。回复不要太长，尽量控制在200字以内。';
-  
+  if (fromUser) {
+    systemContent += `\n\n你当前正在回复群成员"${fromUser}"，回答时直接给出内容即可，不要在开头加"@"或对方昵称（系统会自动在回复前加上@提问者）。`;
+  }
+
   if (searchResults && searchResults.results && searchResults.results.length > 0) {
-    const searchContext = searchResults.results.map((r, i) => 
+    const searchContext = searchResults.results.map((r, i) =>
       `[${i+1}] ${r.title}\n${r.content}\n来源: ${r.url}`
     ).join('\n\n');
     systemContent += `\n\n以下是联网搜索到的最新信息，请基于这些信息回答问题：\n${searchContext}\n\n回答时可以在末尾标注信息来源。`;
