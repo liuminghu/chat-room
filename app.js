@@ -10,6 +10,9 @@ const firebaseConfig = {
 
 let username = '';
 let database = null;
+let onlineUsers = new Set();
+let mentionStartPos = -1;
+let selectedMentionIndex = 0;
 
 function initFirebase() {
   if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
@@ -92,14 +95,116 @@ function displayMessage(message) {
   const time = new Date(message.timestamp);
   const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   
+  onlineUsers.add(message.username);
+  
   messageDiv.innerHTML = `
     <div class="message-username">${isSent ? '我' : escapeHtml(message.username)}</div>
-    <div class="message-content">${escapeHtml(message.text)}</div>
+    <div class="message-content">${formatMessageWithMentions(message.text)}</div>
     <div class="message-time">${timeStr}</div>
   `;
   
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
+}
+
+function formatMessageWithMentions(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(/@([^\s@]+)/g, '<span class="mention-highlight">@$1</span>');
+}
+
+function showMentionList(query) {
+  const mentionList = document.getElementById('mentionList');
+  const users = Array.from(onlineUsers).filter(u => 
+    u !== username && u.toLowerCase().includes(query.toLowerCase())
+  );
+  
+  if (users.length === 0) {
+    mentionList.classList.add('hidden');
+    return;
+  }
+  
+  selectedMentionIndex = 0;
+  mentionList.innerHTML = users.map((user, index) => `
+    <div class="mention-item ${index === 0 ? 'active' : ''}" data-username="${escapeHtml(user)}">
+      <div class="mention-avatar">${escapeHtml(user.charAt(0).toUpperCase())}</div>
+      <span class="mention-name">${escapeHtml(user)}</span>
+    </div>
+  `).join('');
+  
+  mentionList.classList.remove('hidden');
+  
+  mentionList.querySelectorAll('.mention-item').forEach(item => {
+    item.addEventListener('click', () => {
+      insertMention(item.dataset.username);
+    });
+  });
+}
+
+function hideMentionList() {
+  document.getElementById('mentionList').classList.add('hidden');
+  mentionStartPos = -1;
+}
+
+function insertMention(mentionUser) {
+  const input = document.getElementById('messageInput');
+  const text = input.value;
+  const before = text.substring(0, mentionStartPos);
+  const after = text.substring(input.selectionStart);
+  
+  const newText = before + '@' + mentionUser + ' ' + after;
+  input.value = newText;
+  
+  const cursorPos = before.length + mentionUser.length + 2;
+  input.focus();
+  input.setSelectionRange(cursorPos, cursorPos);
+  
+  hideMentionList();
+}
+
+function handleMentionInput() {
+  const input = document.getElementById('messageInput');
+  const cursorPos = input.selectionStart;
+  const text = input.value.substring(0, cursorPos);
+  
+  const lastAtIndex = text.lastIndexOf('@');
+  
+  if (lastAtIndex === -1) {
+    hideMentionList();
+    return;
+  }
+  
+  const charBefore = lastAtIndex > 0 ? text[lastAtIndex - 1] : ' ';
+  if (charBefore !== ' ' && lastAtIndex !== 0) {
+    hideMentionList();
+    return;
+  }
+  
+  const query = text.substring(lastAtIndex + 1);
+  if (query.includes(' ')) {
+    hideMentionList();
+    return;
+  }
+  
+  mentionStartPos = lastAtIndex;
+  showMentionList(query);
+}
+
+function navigateMentionList(direction) {
+  const mentionList = document.getElementById('mentionList');
+  const items = mentionList.querySelectorAll('.mention-item');
+  
+  if (items.length === 0) return;
+  
+  items[selectedMentionIndex].classList.remove('active');
+  
+  if (direction === 'down') {
+    selectedMentionIndex = (selectedMentionIndex + 1) % items.length;
+  } else {
+    selectedMentionIndex = (selectedMentionIndex - 1 + items.length) % items.length;
+  }
+  
+  items[selectedMentionIndex].classList.add('active');
+  items[selectedMentionIndex].scrollIntoView({ block: 'nearest' });
 }
 
 function addSystemMessage(text) {
@@ -145,9 +250,39 @@ document.getElementById('sendBtn').addEventListener('click', sendMessage);
 document.getElementById('usernameInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
 });
-document.getElementById('messageInput').addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') sendMessage();
+
+const messageInput = document.getElementById('messageInput');
+messageInput.addEventListener('input', handleMentionInput);
+messageInput.addEventListener('keydown', (e) => {
+  const mentionList = document.getElementById('mentionList');
+  const isMentionVisible = !mentionList.classList.contains('hidden');
+  
+  if (isMentionVisible) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateMentionList('down');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateMentionList('up');
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const activeItem = mentionList.querySelector('.mention-item.active');
+      if (activeItem) {
+        insertMention(activeItem.dataset.username);
+      }
+    } else if (e.key === 'Escape') {
+      hideMentionList();
+    }
+  } else if (e.key === 'Enter') {
+    sendMessage();
+  }
 });
+
+messageInput.addEventListener('blur', () => {
+  setTimeout(hideMentionList, 200);
+});
+
+messageInput.addEventListener('focus', handleMentionInput);
 
 window.addEventListener('load', () => {
   const savedUsername = localStorage.getItem('chat_username');

@@ -176,8 +176,13 @@ body {
   gap: 12px;
 }
 
-.input-area input {
+.input-wrapper {
   flex: 1;
+  position: relative;
+}
+
+.input-area input {
+  width: 100%;
   padding: 12px 18px;
   font-size: 15px;
   border: 2px solid #e0e0e0;
@@ -188,6 +193,62 @@ body {
 .input-area input:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.mention-list {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.mention-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.2s;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: #f0f2ff;
+}
+
+.mention-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mention-name {
+  font-size: 14px;
+  color: #333;
+}
+
+.mention-highlight {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.message.sent .mention-highlight {
+  color: #ffe066;
+  font-weight: 600;
 }
 
 .input-area button {

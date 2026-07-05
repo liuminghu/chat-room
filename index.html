@@ -23,7 +23,10 @@
       <div id="messagesContainer" class="messages-container"></div>
       
       <div class="input-area">
-        <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500">
+        <div class="input-wrapper">
+          <input type="text" id="messageInput" placeholder="输入消息...  输入 @ 可以艾特别人" maxlength="500">
+          <div id="mentionList" class="mention-list hidden"></div>
+        </div>
         <button id="sendBtn">发送</button>
       </div>
     </div>
