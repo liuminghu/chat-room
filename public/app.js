@@ -1,35 +1,49 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyCaScHr69e9DCuryeTj0upmhgzQZDTGOdI",
-  authDomain: "chat-room-demo-e837c.firebaseapp.com",
-  databaseURL: "https://chat-room-demo-e837c-default-rtdb.firebaseio.com",
-  projectId: "chat-room-demo-e837c",
-  storageBucket: "chat-room-demo-e837c.firebasestorage.app",
-  messagingSenderId: "503903612427",
-  appId: "1:503903612427:web:cfe6ba1a23779e5343a10e"
-};
+const BOT_NAME = '小助手';
 
 let username = '';
-let database = null;
-let onlineUsers = new Set();
+let socket = null;
+let onlineUsers = [];
 let mentionStartPos = -1;
 let selectedMentionIndex = 0;
+let typingMessageIds = new Set();
 
-function initFirebase() {
-  if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
-    console.warn('请先配置 Firebase 配置信息');
-    return false;
+function getSocketUrl() {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return window.location.origin;
   }
-  
-  try {
-    firebase.initializeApp(firebaseConfig);
-    database = firebase.database();
+  return window.location.origin;
+}
+
+function connectSocket() {
+  socket = io(getSocketUrl(), {
+    transports: ['websocket', 'polling']
+  });
+
+  socket.on('connect', () => {
     updateUserStatus('已连接');
-    return true;
-  } catch (error) {
-    console.error('Firebase 初始化失败:', error);
-    updateUserStatus('连接失败');
-    return false;
-  }
+  });
+
+  socket.on('disconnect', () => {
+    updateUserStatus('已断开');
+  });
+
+  socket.on('history', (messages) => {
+    messages.forEach(msg => displayMessage(msg));
+  });
+
+  socket.on('message', (message) => {
+    displayMessage(message);
+  });
+
+  socket.on('removeTyping', (id) => {
+    const el = document.querySelector(`[data-msg-id="${id}"]`);
+    if (el) el.remove();
+    typingMessageIds.delete(id);
+  });
+
+  socket.on('userList', (users) => {
+    onlineUsers = users;
+  });
 }
 
 function updateUserStatus(status) {
@@ -51,13 +65,11 @@ function joinChat() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatScreen').classList.remove('hidden');
   
-  if (database) {
-    listenForMessages();
-    addSystemMessage(`${username} 加入了聊天室`);
-  } else {
-    loadLocalMessages();
-    addSystemMessage(`欢迎 ${username}！（本地模式）`);
+  if (!socket) {
+    connectSocket();
   }
+  
+  socket.emit('join', name);
   
   document.getElementById('messageInput').focus();
 }
@@ -66,40 +78,68 @@ function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
   
-  if (!text) return;
+  if (!text || !socket) return;
   
-  const messageData = {
-    username: username,
-    text: text,
-    timestamp: Date.now()
-  };
-  
-  if (database) {
-    database.ref('messages').push(messageData);
-  } else {
-    saveLocalMessage(messageData);
-    displayMessage(messageData);
-  }
+  socket.emit('message', { text: text });
   
   input.value = '';
   input.focus();
+  hideMentionList();
 }
 
 function displayMessage(message) {
   const container = document.getElementById('messagesContainer');
+  
+  if (message.id && typingMessageIds.has(message.id)) {
+    return;
+  }
+
+  if (message.type === 'typing') {
+    typingMessageIds.add(message.id);
+  }
+
   const messageDiv = document.createElement('div');
   
+  if (message.type === 'system') {
+    messageDiv.className = 'system-message';
+    const time = new Date(message.timestamp);
+    const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    messageDiv.textContent = message.text;
+    messageDiv.title = timeStr;
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+    return;
+  }
+  
   const isSent = message.username === username;
+  const isBot = message.username === BOT_NAME;
   messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+  if (message.id) {
+    messageDiv.dataset.msgId = message.id;
+  }
   
   const time = new Date(message.timestamp);
   const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   
-  onlineUsers.add(message.username);
+  if (!onlineUsers.includes(message.username)) {
+    onlineUsers.push(message.username);
+  }
+  
+  let displayName = isSent ? '我' : escapeHtml(message.username);
+  if (isBot) {
+    displayName += '<span class="message-bot-badge">AI</span>';
+  }
+  
+  let contentHtml;
+  if (message.type === 'typing') {
+    contentHtml = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  } else {
+    contentHtml = formatMessageWithMentions(message.text);
+  }
   
   messageDiv.innerHTML = `
-    <div class="message-username">${isSent ? '我' : escapeHtml(message.username)}</div>
-    <div class="message-content">${formatMessageWithMentions(message.text)}</div>
+    <div class="message-username">${displayName}</div>
+    <div class="message-content">${contentHtml}</div>
     <div class="message-time">${timeStr}</div>
   `;
   
@@ -114,7 +154,7 @@ function formatMessageWithMentions(text) {
 
 function showMentionList(query) {
   const mentionList = document.getElementById('mentionList');
-  const users = Array.from(onlineUsers).filter(u => 
+  const users = onlineUsers.filter(u => 
     u !== username && u.toLowerCase().includes(query.toLowerCase())
   );
   
@@ -207,38 +247,6 @@ function navigateMentionList(direction) {
   items[selectedMentionIndex].scrollIntoView({ block: 'nearest' });
 }
 
-function addSystemMessage(text) {
-  const container = document.getElementById('messagesContainer');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'system-message';
-  messageDiv.textContent = text;
-  container.appendChild(messageDiv);
-  container.scrollTop = container.scrollHeight;
-}
-
-function listenForMessages() {
-  const messagesRef = database.ref('messages').limitToLast(100);
-  
-  messagesRef.on('child_added', (snapshot) => {
-    const message = snapshot.val();
-    displayMessage(message);
-  });
-}
-
-function saveLocalMessage(message) {
-  let messages = JSON.parse(localStorage.getItem('chat_messages') || '[]');
-  messages.push(message);
-  if (messages.length > 100) {
-    messages = messages.slice(-100);
-  }
-  localStorage.setItem('chat_messages', JSON.stringify(messages));
-}
-
-function loadLocalMessages() {
-  const messages = JSON.parse(localStorage.getItem('chat_messages') || '[]');
-  messages.forEach(msg => displayMessage(msg));
-}
-
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
@@ -289,6 +297,4 @@ window.addEventListener('load', () => {
   if (savedUsername) {
     document.getElementById('usernameInput').value = savedUsername;
   }
-  
-  initFirebase();
 });
