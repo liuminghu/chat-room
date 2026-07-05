@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { tavily } = require('@tavily/core');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,7 +20,13 @@ app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const BOT_NAME = '小助手';
+
+let tvly = null;
+if (TAVILY_API_KEY) {
+  tvly = tavily({ apiKey: TAVILY_API_KEY });
+}
 
 let messages = [];
 let users = new Map();
@@ -94,6 +101,28 @@ function shouldTriggerBot(text, username) {
   return text.includes('@' + BOT_NAME) || text.startsWith('小助手');
 }
 
+function needsWebSearch(text) {
+  if (!TAVILY_API_KEY || !tvly) return false;
+  const keywords = ['天气', '今天', '最新', '现在', '近期', '新闻', '价格', '股价', '行情', '多少岁', '几岁', '身高', '体重', '怎么', '如何', '什么是', '介绍一下', '百度', '搜索', '查一下', '帮我找', '2025', '2026', '今年', '昨天', '明天', '最近'];
+  const lowerText = text.toLowerCase();
+  return keywords.some(kw => lowerText.includes(kw));
+}
+
+async function searchWeb(query) {
+  if (!tvly) return null;
+  try {
+    const results = await tvly.search(query, {
+      search_depth: 'basic',
+      max_results: 5,
+      include_answer: false
+    });
+    return results;
+  } catch (err) {
+    console.error('搜索失败:', err);
+    return null;
+  }
+}
+
 let botConversationHistory = [];
 
 async function handleBotReply(userText, fromUser) {
@@ -117,7 +146,12 @@ async function handleBotReply(userText, fromUser) {
   io.emit('message', typingMsg);
 
   try {
-    const response = await callDeepSeekAPI(botConversationHistory);
+    let searchResults = null;
+    if (needsWebSearch(cleanText)) {
+      searchResults = await searchWeb(cleanText);
+    }
+    
+    const response = await callDeepSeekAPI(botConversationHistory, searchResults);
     
     botConversationHistory.push({
       role: 'assistant',
@@ -155,10 +189,19 @@ async function handleBotReply(userText, fromUser) {
   }
 }
 
-async function callDeepSeekAPI(messages) {
+async function callDeepSeekAPI(messages, searchResults = null) {
+  let systemContent = '你是一个友好的群聊助手，叫"小助手"。请用简洁、亲切的语气回答问题。回复不要太长，尽量控制在200字以内。';
+  
+  if (searchResults && searchResults.results && searchResults.results.length > 0) {
+    const searchContext = searchResults.results.map((r, i) => 
+      `[${i+1}] ${r.title}\n${r.content}\n来源: ${r.url}`
+    ).join('\n\n');
+    systemContent += `\n\n以下是联网搜索到的最新信息，请基于这些信息回答问题：\n${searchContext}\n\n回答时可以在末尾标注信息来源。`;
+  }
+
   const systemPrompt = {
     role: 'system',
-    content: '你是一个友好的群聊助手，叫"小助手"。请用简洁、亲切的语气回答问题。回复不要太长，尽量控制在200字以内。'
+    content: systemContent
   };
 
   const requestMessages = [systemPrompt, ...messages];
@@ -173,7 +216,7 @@ async function callDeepSeekAPI(messages) {
       model: 'deepseek-chat',
       messages: requestMessages,
       temperature: 0.7,
-      max_tokens: 500
+      max_tokens: 800
     })
   });
 
@@ -187,7 +230,7 @@ async function callDeepSeekAPI(messages) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', onlineUsers: users.size, hasApiKey: !!DEEPSEEK_API_KEY });
+  res.json({ status: 'ok', onlineUsers: users.size, hasDeepSeekKey: !!DEEPSEEK_API_KEY, hasTavilyKey: !!TAVILY_API_KEY });
 });
 
 server.listen(PORT, () => {
