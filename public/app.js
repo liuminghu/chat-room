@@ -34,17 +34,46 @@ function getSocketUrl() {
   return window.location.origin;
 }
 
+let reconnectAttempt = 0;
+const MAX_RECONNECT_DELAY = 30000;
+
 function connectSocket() {
   socket = io(getSocketUrl(), {
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: MAX_RECONNECT_DELAY,
+    reconnectionAttempts: Infinity,
+    timeout: 20000,
+    pingInterval: 15000,
+    pingTimeout: 10000
   });
 
   socket.on('connect', () => {
+    reconnectAttempt = 0;
+    updateUserStatus('已连接');
+
+    if (username && currentRoomId) {
+      document.getElementById('messagesContainer').innerHTML = '';
+      onlineUsers = [];
+      socket.emit('join', { roomId: currentRoomId, username: username });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    updateUserStatus('已断开');
+  });
+
+  socket.on('reconnect', (attemptNumber) => {
     updateUserStatus('已连接');
   });
 
-  socket.on('disconnect', () => {
-    updateUserStatus('已断开');
+  socket.on('reconnecting', (attemptNumber) => {
+    updateUserStatus(`重连中(${attemptNumber})`);
+  });
+
+  socket.on('connect_error', (err) => {
+    console.warn('连接错误:', err.message);
   });
 
   socket.on('history', (messages) => {

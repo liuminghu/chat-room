@@ -11,7 +11,10 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  pingInterval: 15000,
+  pingTimeout: 10000,
+  connectTimeout: 20000
 });
 
 app.use(cors());
