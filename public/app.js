@@ -107,13 +107,27 @@ function renderMembersList(users) {
     const avatar = isBot ? '🤖' : getAvatarEmoji(member);
     
     return `
-      <div class="member-item ${isMe ? 'me' : ''}">
+      <div class="member-item ${isMe ? 'me' : ''}" data-username="${escapeHtml(member)}">
         <span class="member-avatar">${avatar}</span>
         <span class="member-name">${isMe ? '我' : escapeHtml(member)}</span>
         <span class="member-status ${isOnline ? 'online' : ''}"></span>
       </div>
     `;
   }).join('');
+
+  membersList.querySelectorAll('.member-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const memberName = item.dataset.username;
+      if (memberName === username) return;
+      
+      const input = document.getElementById('messageInput');
+      if (input.value.length > 0 && !input.value.endsWith(' ')) {
+        input.value += ' ';
+      }
+      input.value += '@' + memberName + ' ';
+      input.focus();
+    });
+  });
 }
 
 function updateUserStatus(status) {
