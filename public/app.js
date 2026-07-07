@@ -375,14 +375,34 @@ window.addEventListener('load', () => {
     document.getElementById('roomIdInput').value = initialRoomId;
   }
 
+  // 如果本地有登录信息，直接进入聊天界面，后台连接
+  if (savedUsername && initialRoomId) {
+    showChatScreen(savedUsername, initialRoomId);
+  }
+
   connectSocket();
 
   socket.on('connect', () => {
     if (savedUsername && initialRoomId) {
-      joinChat(savedUsername, initialRoomId);
+      socket.emit('join', { roomId: initialRoomId, username: savedUsername });
+      document.getElementById('messageInput').focus();
     }
   });
 });
+
+function showChatScreen(name, roomId) {
+  username = name;
+  currentRoomId = roomId;
+
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+
+  const roomBadge = document.getElementById('roomBadge');
+  roomBadge.textContent = `#${roomId}`;
+  roomBadge.classList.remove('hidden');
+
+  document.getElementById('shareBtn').classList.remove('hidden');
+}
 
 function joinChat(name, roomId) {
   const usernameInput = document.getElementById('usernameInput');
@@ -404,14 +424,7 @@ function joinChat(name, roomId) {
   localStorage.setItem('chat_username', nameToUse);
   localStorage.setItem('chat_room_id', roomIdToUse);
 
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('chatScreen').classList.remove('hidden');
-
-  const roomBadge = document.getElementById('roomBadge');
-  roomBadge.textContent = `#${roomIdToUse}`;
-  roomBadge.classList.remove('hidden');
-
-  document.getElementById('shareBtn').classList.remove('hidden');
+  showChatScreen(nameToUse, roomIdToUse);
 
   document.getElementById('messagesContainer').innerHTML = '';
   onlineUsers = [];
