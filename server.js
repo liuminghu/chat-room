@@ -1403,7 +1403,10 @@ async function firebaseDelete(path) {
 
 async function deleteAllRooms() {
   try {
-    const url = `${FIREBASE_DB_URL}/rooms.json`;
+    let url = `${FIREBASE_DB_URL}/rooms.json`;
+    if (FIREBASE_API_KEY) {
+      url += `?auth=${FIREBASE_API_KEY}`;
+    }
     const res = await fetch(url, { agent: false });
     if (!res.ok) {
       console.error(`Firebase 获取房间列表失败: HTTP ${res.status}`);
@@ -1459,7 +1462,11 @@ app.post('/api/admin/clear-messages', async (req, res) => {
       rooms.forEach(room => {
         room.messages = [];
       });
-      const roomsRes = await fetch(`${FIREBASE_DB_URL}/rooms.json`, { agent: false });
+      let roomsUrl = `${FIREBASE_DB_URL}/rooms.json`;
+      if (FIREBASE_API_KEY) {
+        roomsUrl += `?auth=${FIREBASE_API_KEY}`;
+      }
+      const roomsRes = await fetch(roomsUrl, { agent: false });
       if (roomsRes.ok) {
         const roomsData = await roomsRes.json();
         if (roomsData) {
