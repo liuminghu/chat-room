@@ -78,7 +78,7 @@ async function saveMessageToFirebase(roomId, msg) {
 
 async function loadMessagesFromFirebase(roomId, limit = 50) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=${limit}`);
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&limitToLast=${limit}`);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
