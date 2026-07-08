@@ -1000,21 +1000,19 @@ async function fetchDeepSeekBalance() {
       return { configured: true, ok: false, error: `HTTP ${res.status}: ${text}` };
     }
     const data = await res.json();
-    const info = data?.data || data;
     let balance = null;
     let currency = 'CNY';
     
-    if (info?.total_balance !== undefined) {
-      balance = info.total_balance;
-      currency = info.currency || 'CNY';
-    } else if (info?.balance !== undefined) {
-      balance = info.balance;
-      currency = info.currency || 'CNY';
-    } else if (typeof info === 'object') {
-      const balanceKey = Object.keys(info).find(k => k.toLowerCase().includes('balance'));
-      if (balanceKey) {
-        balance = info[balanceKey];
-      }
+    if (Array.isArray(data?.balance_infos) && data.balance_infos.length > 0) {
+      const first = data.balance_infos[0];
+      balance = first?.total_balance ?? null;
+      currency = first?.currency || 'CNY';
+    } else if (data?.data?.total_balance !== undefined) {
+      balance = data.data.total_balance;
+      currency = data.data.currency || 'CNY';
+    } else if (data?.total_balance !== undefined) {
+      balance = data.total_balance;
+      currency = data.currency || 'CNY';
     }
     
     return {
@@ -1022,8 +1020,7 @@ async function fetchDeepSeekBalance() {
       ok: true,
       balance,
       currency,
-      raw: info,
-      rawJson: JSON.stringify(data)
+      raw: data
     };
   } catch (err) {
     return { configured: true, ok: false, error: err.message };
