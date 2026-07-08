@@ -1119,6 +1119,49 @@ async function callDeepSeekAPI(messages, searchResults = null, fromUser = '', is
   return data.choices[0].message.content.trim();
 }
 
+app.get('/api/debug/firebase-index', async (req, res) => {
+  try {
+    const url = `${FIREBASE_DB_URL}/rooms/123/messages.json?orderBy=%22timestamp%22&limitToLast=10`;
+    const response = await fetch(url, { agent: false });
+    
+    if (response.ok) {
+      const data = await response.json();
+      res.json({
+        ok: true,
+        status: response.status,
+        messageCount: data ? Object.keys(data).length : 0,
+        message: '索引已存在且正常工作'
+      });
+      return;
+    }
+    
+    const text = await response.text();
+    let errorMessage = text;
+    let indexLink = '';
+    
+    try {
+      const json = JSON.parse(text);
+      errorMessage = json.error || text;
+      if (json.error && json.error.indexOf('index') !== -1) {
+        const match = text.match(/https:\/\/console\.firebase\.google\.com[^"]+/);
+        if (match) {
+          indexLink = match[0];
+        }
+      }
+    } catch (e) {}
+    
+    res.json({
+      ok: false,
+      status: response.status,
+      error: errorMessage,
+      indexLink: indexLink || '请手动在 Firebase Console 中创建索引',
+      instructions: '如果收到 "Permission denied" 或 "Index not defined" 错误，请访问上述链接或手动在 Firebase Console 的 Realtime Database Rules 中添加索引'
+    });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   let totalUsers = 0;
   let totalMessages = 0;
