@@ -12,9 +12,10 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST']
   },
-  pingInterval: 15000,
-  pingTimeout: 10000,
-  connectTimeout: 20000
+  pingInterval: 25000,
+  pingTimeout: 20000,
+  connectTimeout: 30000,
+  upgradeTimeout: 20000
 });
 
 app.use(cors());
@@ -581,7 +582,7 @@ io.on('connection', (socket) => {
           saveMessageToFirebase(roomId, systemMsg);
           io.to(roomId).emit('message', systemMsg);
         }
-      }, 8000);
+      }, 20000);
     }
     console.log('用户断开:', socket.id);
   });

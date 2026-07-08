@@ -65,12 +65,14 @@ function connectSocket() {
   socket = io(getSocketUrl(), {
     transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionDelay: 1000,
+    reconnectionDelay: 1500,
     reconnectionDelayMax: MAX_RECONNECT_DELAY,
     reconnectionAttempts: Infinity,
-    timeout: 20000,
-    pingInterval: 15000,
-    pingTimeout: 10000
+    timeout: 30000,
+    pingInterval: 25000,
+    pingTimeout: 20000,
+    upgrade: true,
+    forceNew: false
   });
 
   socket.on('connect', () => {
@@ -865,6 +867,13 @@ window.addEventListener('load', () => {
   if (savedUsername && initialRoomId) {
     showChatScreen(savedUsername, initialRoomId);
   }
+
+  // 页面从后台切回前台时，主动重连
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && socket && socket.disconnected) {
+      socket.connect();
+    }
+  });
 
   connectSocket();
 });
