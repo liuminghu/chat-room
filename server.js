@@ -110,6 +110,43 @@ app.get('/api/cloudinary-test', async (req, res) => {
   }
 });
 
+const imageProxyCache = new Map();
+const IMAGE_CACHE_TTL = 30 * 60 * 1000;
+
+app.get('/api/image-proxy', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl || !imageUrl.startsWith('http')) {
+      return res.status(400).json({ error: '无效的图片URL' });
+    }
+    
+    const cached = imageProxyCache.get(imageUrl);
+    if (cached && Date.now() - cached.cachedAt < IMAGE_CACHE_TTL) {
+      res.setHeader('Content-Type', cached.type);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(cached.buffer);
+    }
+    
+    const response = await fetch(imageUrl, { agent: false });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: '图片获取失败' });
+    }
+    
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    imageProxyCache.set(imageUrl, { buffer, type: contentType, cachedAt: Date.now() });
+    
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err) {
+    console.error('图片代理失败:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const DEEPSEEK_MODELS = [
   { id: 'deepseek-chat', name: 'DeepSeek-V3', desc: '通用聊天模型，平衡性能与速度' },
   { id: 'deepseek-reasoner', name: 'DeepSeek-R1', desc: '推理模型，擅长复杂数学和逻辑推理' }
