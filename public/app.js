@@ -472,17 +472,53 @@ let audioChunks = [];
 let voiceRecordingTimer = null;
 let voiceRecordingSeconds = 0;
 
+async function compressImage(file, maxWidth = 1280, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        } else {
+          resolve(file);
+        }
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 async function handleImageUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
   
-  showToast('正在上传图片...', 'info');
-  
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('folder', 'images');
+  showToast('正在处理图片...', 'info');
   
   try {
+    const compressedFile = await compressImage(file);
+    
+    showToast('正在上传图片...', 'info');
+    
+    const formData = new FormData();
+    formData.append('file', compressedFile);
+    formData.append('folder', 'images');
+    
     const res = await fetch('/api/upload', {
       method: 'POST',
       body: formData
@@ -792,7 +828,11 @@ function displayMessage(message, prepend = false) {
   if (message.type === 'typing') {
     contentHtml = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   } else if (message.type === 'image' && message.imageUrl) {
-    contentHtml = `<img src="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片">`;
+    contentHtml = `
+      <div class="message-image-wrapper">
+        <div class="message-image-loading">⏳ 图片加载中...</div>
+        <img src="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.textContent='❌ 图片加载失败'">
+      </div>`;
   } else if (message.type === 'audio' && message.audioUrl) {
     const mins = Math.floor(message.duration / 60).toString().padStart(2, '0');
     const secs = (message.duration % 60).toString().padStart(2, '0');
