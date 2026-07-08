@@ -1502,14 +1502,28 @@ async function tryDeleteRootMessages() {
 }
 
 app.post('/api/admin/clear-messages', async (req, res) => {
-  const { roomId, level } = req.body || {};
+  const { roomId, level, target } = req.body || {};
 
   try {
-    if (level === 'full') {
+    if (target === 'files') {
+      await firebaseDelete('/files');
+      console.log('已清空 Firebase 文件存储');
+      res.json({ ok: true, clearedFiles: true });
+    } else if (target === 'cloudinary') {
+      try {
+        const result = await cloudinary.api.delete_resources_by_prefix('chat-room/');
+        console.log('Cloudinary文件清理结果:', result);
+        res.json({ ok: true, clearedCloudinary: true, result });
+      } catch (err) {
+        console.error('Cloudinary清理失败:', err);
+        res.json({ ok: false, error: err.message });
+      }
+    } else if (level === 'full') {
       await deleteAllRooms();
       await tryDeleteRootMessages();
       await firebaseDelete('/botUsage');
       await firebaseDelete('/config');
+      await firebaseDelete('/files');
       rooms.clear();
       io.emit('messagesCleared', { level: 'full' });
       console.log('已完全清空 Firebase 所有数据');

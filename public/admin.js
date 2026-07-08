@@ -38,11 +38,28 @@ document.addEventListener('DOMContentLoaded', () => {
       showConfirmModal({
         icon: '🔥',
         title: '确认清理Firebase全部数据？',
-        desc: '此操作将删除 Firebase 中的所有数据：所有房间消息、房间元数据、机器人使用统计、应用配置。服务器内存中的所有数据也会被清空。此操作不可撤销！',
+        desc: '此操作将删除 Firebase 中的所有数据：所有房间消息、房间元数据、机器人使用统计、应用配置、旧文件存储。服务器内存中的所有数据也会被清空。此操作不可撤销！',
         confirmText: '确认清理',
         onConfirm: async () => {
           await clearMessages(null, 'full');
           loadDashboard();
+          loadUsage();
+        }
+      });
+    });
+  }
+
+  const clearFilesBtn = document.getElementById('clearFilesBtn');
+  if (clearFilesBtn) {
+    clearFilesBtn.addEventListener('click', () => {
+      showConfirmModal({
+        icon: '📁',
+        title: '确认清理文件存储？',
+        desc: '此操作将清理 Cloudinary 中的所有图片/语音文件，以及 Firebase 中残留的旧文件数据。此操作不可撤销！',
+        confirmText: '确认清理',
+        onConfirm: async () => {
+          await clearMessages(null, null, 'cloudinary');
+          await clearMessages(null, null, 'files');
           loadUsage();
         }
       });
@@ -496,9 +513,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-async function clearMessages(roomId, level) {
+async function clearMessages(roomId, level, target) {
   try {
-    const body = roomId ? { roomId } : (level ? { level } : {});
+    const body = roomId ? { roomId } : (level ? { level } : (target ? { target } : {}));
     const res = await fetch('/api/admin/clear-messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -508,11 +525,11 @@ async function clearMessages(roomId, level) {
     if (data.ok) {
       return true;
     } else {
-      alert('清空失败: ' + (data.error || '未知错误'));
+      alert('操作失败: ' + (data.error || '未知错误'));
       return false;
     }
   } catch (err) {
-    alert('清空失败: ' + err.message);
+    alert('操作失败: ' + err.message);
     return false;
   }
 }
