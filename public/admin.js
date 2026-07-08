@@ -31,6 +31,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  const clearFirebaseBtn = document.getElementById('clearFirebaseBtn');
+  if (clearFirebaseBtn) {
+    clearFirebaseBtn.addEventListener('click', () => {
+      showConfirmModal({
+        icon: '🔥',
+        title: '确认清理Firebase全部数据？',
+        desc: '此操作将删除 Firebase 中的所有数据：所有房间消息、房间元数据、机器人使用统计、应用配置。服务器内存中的所有数据也会被清空。此操作不可撤销！',
+        confirmText: '确认清理',
+        onConfirm: async () => {
+          await clearMessages(null, 'full');
+          loadDashboard();
+          loadUsage();
+        }
+      });
+    });
+  }
 });
 
 function initNavigation() {

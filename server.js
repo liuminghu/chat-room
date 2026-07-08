@@ -1381,10 +1381,19 @@ async function fetchFirebaseStats() {
 }
 
 app.post('/api/admin/clear-messages', async (req, res) => {
-  const { roomId } = req.body || {};
+  const { roomId, level } = req.body || {};
 
   try {
-    if (roomId) {
+    if (level === 'full') {
+      await Promise.all([
+        fetch(`${FIREBASE_DB_URL}/rooms.json`, { agent: false, method: 'DELETE' }),
+        fetch(`${FIREBASE_DB_URL}/botUsage.json`, { agent: false, method: 'DELETE' }),
+        fetch(`${FIREBASE_DB_URL}/config.json`, { agent: false, method: 'DELETE' })
+      ]);
+      rooms.clear();
+      console.log('已完全清空 Firebase 所有数据');
+      res.json({ ok: true, clearedAll: true, level: 'full' });
+    } else if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
         room.messages = [];
