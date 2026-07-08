@@ -1001,12 +1001,29 @@ async function fetchDeepSeekBalance() {
     }
     const data = await res.json();
     const info = data?.data || data;
+    let balance = null;
+    let currency = 'CNY';
+    
+    if (info?.total_balance !== undefined) {
+      balance = info.total_balance;
+      currency = info.currency || 'CNY';
+    } else if (info?.balance !== undefined) {
+      balance = info.balance;
+      currency = info.currency || 'CNY';
+    } else if (typeof info === 'object') {
+      const balanceKey = Object.keys(info).find(k => k.toLowerCase().includes('balance'));
+      if (balanceKey) {
+        balance = info[balanceKey];
+      }
+    }
+    
     return {
       configured: true,
       ok: true,
-      balance: info?.total_balance || info?.balance || (Array.isArray(info) ? info.map(i => i.balance).reduce((a, b) => a + (Number(b) || 0), 0) : null),
-      currency: info?.currency || 'CNY',
-      raw: info
+      balance,
+      currency,
+      raw: info,
+      rawJson: JSON.stringify(data)
     };
   } catch (err) {
     return { configured: true, ok: false, error: err.message };
@@ -1037,11 +1054,40 @@ async function fetchTavilyUsage() {
   }
 }
 
+async function fetchBotUsageStats() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage.json`);
+    if (!res.ok) return { error: `HTTP ${res.status}` };
+    const data = await res.json();
+    if (!data) return { todayTotal: 0, users: 0 };
+    
+    const today = new Date().toISOString().split('T')[0];
+    let todayTotal = 0;
+    let users = 0;
+    
+    Object.values(data).forEach(userData => {
+      if (userData && typeof userData === 'object') {
+        users++;
+        todayTotal += userData[today] || 0;
+      }
+    });
+    
+    return { todayTotal, users, data };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 app.get('/api/usage', async (req, res) => {
-  const [deepseek, tavily] = await Promise.all([fetchDeepSeekBalance(), fetchTavilyUsage()]);
+  const [deepseek, tavily, botStats] = await Promise.all([
+    fetchDeepSeekBalance(), 
+    fetchTavilyUsage(),
+    fetchBotUsageStats()
+  ]);
   res.json({
     deepseek,
     tavily,
+    botStats,
     checkedAt: new Date().toISOString()
   });
 });

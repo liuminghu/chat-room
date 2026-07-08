@@ -102,6 +102,7 @@ function updateServiceStatus(data) {
 
 async function loadUsage() {
   const list = document.getElementById('usageList');
+  const botList = document.getElementById('botStatsList');
   const checkedAt = document.getElementById('usageCheckedAt');
 
   list.innerHTML = `
@@ -110,12 +111,20 @@ async function loadUsage() {
       <p>正在查询额度信息...</p>
     </div>
   `;
+  
+  botList.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🤖</div>
+      <p>正在加载统计数据...</p>
+    </div>
+  `;
 
   try {
     const res = await fetch('/api/usage');
     const data = await res.json();
     checkedAt.textContent = data.checkedAt ? `查询时间：${new Date(data.checkedAt).toLocaleString('zh-CN')}` : '--';
     updateUsageList(data);
+    updateBotStatsList(data.botStats || {});
   } catch (err) {
     checkedAt.textContent = '查询失败';
     list.innerHTML = `
@@ -128,6 +137,37 @@ async function loadUsage() {
   }
 }
 
+function updateBotStatsList(stats) {
+  const list = document.getElementById('botStatsList');
+  
+  if (stats.error) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>统计加载失败</p>
+        <p class="empty-sub">${escapeHtml(stats.error)}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  const statsItems = [
+    { name: '今日总调用', value: stats.todayTotal || 0, icon: '📊' },
+    { name: '活跃用户数', value: stats.users || 0, icon: '👥' }
+  ];
+  
+  list.innerHTML = statsItems.map(item => `
+    <div class="usage-card">
+      <div class="usage-icon">${item.icon}</div>
+      <div class="usage-info">
+        <div class="usage-name">${item.name}</div>
+        <div class="usage-detail">机器人对话次数</div>
+      </div>
+      <div class="usage-value active">${item.value}</div>
+    </div>
+  `).join('');
+}
+
 function updateUsageList(data) {
   const list = document.getElementById('usageList');
   const providers = [
@@ -138,10 +178,19 @@ function updateUsageList(data) {
       render: (info) => {
         if (!info.configured) return { value: '未配置 API Key', status: 'inactive', detail: '请配置 DEEPSEEK_API_KEY 环境变量' };
         if (!info.ok) return { value: '查询失败', status: 'error', detail: info.error };
+        if (info.balance !== null && info.balance !== undefined) {
+          const balanceNum = Number(info.balance);
+          const displayBalance = isNaN(balanceNum) ? String(info.balance) : balanceNum.toFixed(2);
+          return {
+            value: `${displayBalance} ${info.currency || 'CNY'}`,
+            status: 'active',
+            detail: '账户余额'
+          };
+        }
         return {
-          value: info.balance !== null ? `${info.balance} ${info.currency || ''}`.trim() : '余额可用',
+          value: '余额可用',
           status: 'active',
-          detail: '账户余额'
+          detail: info.rawJson ? 'API返回数据已记录' : '账户余额'
         };
       }
     },
