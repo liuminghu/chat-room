@@ -26,6 +26,7 @@ const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
 const BOT_NAME = '小助手';
 const DEFAULT_ROOM = 'public';
 const BOT_RATE_LIMIT = 10;
@@ -1380,15 +1381,35 @@ async function fetchFirebaseStats() {
   }
 }
 
+async function firebaseDelete(path) {
+  let url = `${FIREBASE_DB_URL}${path}.json`;
+  if (FIREBASE_API_KEY) {
+    url += `?auth=${FIREBASE_API_KEY}`;
+  }
+  try {
+    const res = await fetch(url, { agent: false, method: 'DELETE' });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`Firebase DELETE ${path} 失败: HTTP ${res.status}, 响应: ${text}`);
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    console.log(`Firebase DELETE ${path} 成功`);
+    return true;
+  } catch (err) {
+    console.error(`Firebase DELETE ${path} 异常:`, err.message);
+    throw err;
+  }
+}
+
 app.post('/api/admin/clear-messages', async (req, res) => {
   const { roomId, level } = req.body || {};
 
   try {
     if (level === 'full') {
       await Promise.all([
-        fetch(`${FIREBASE_DB_URL}/rooms.json`, { agent: false, method: 'DELETE' }),
-        fetch(`${FIREBASE_DB_URL}/botUsage.json`, { agent: false, method: 'DELETE' }),
-        fetch(`${FIREBASE_DB_URL}/config.json`, { agent: false, method: 'DELETE' })
+        firebaseDelete('/rooms'),
+        firebaseDelete('/botUsage'),
+        firebaseDelete('/config')
       ]);
       rooms.clear();
       io.emit('messagesCleared', { level: 'full' });
@@ -1399,10 +1420,7 @@ app.post('/api/admin/clear-messages', async (req, res) => {
       if (room) {
         room.messages = [];
       }
-      await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`, {
-        agent: false,
-        method: 'DELETE'
-      });
+      await firebaseDelete(`/rooms/${roomId}/messages`);
       io.to(roomId).emit('messagesCleared', { roomId });
       console.log(`已清空房间 ${roomId} 的消息记录`);
       res.json({ ok: true, clearedRoom: roomId });
@@ -1415,10 +1433,7 @@ app.post('/api/admin/clear-messages', async (req, res) => {
         const roomsData = await roomsRes.json();
         if (roomsData) {
           const deletePromises = Object.keys(roomsData).map(id =>
-            fetch(`${FIREBASE_DB_URL}/rooms/${id}/messages.json`, {
-              agent: false,
-              method: 'DELETE'
-            })
+            firebaseDelete(`/rooms/${id}/messages`)
           );
           await Promise.all(deletePromises);
         }
