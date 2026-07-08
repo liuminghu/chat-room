@@ -899,6 +899,7 @@ function showChatScreen(name, roomId) {
 
   document.getElementById('shareBtn').classList.remove('hidden');
   document.getElementById('editNameBtn').classList.remove('hidden');
+  document.getElementById('switchRoomBtn').classList.remove('hidden');
   
   // 移动端显示成员按钮
   if (window.innerWidth <= 600) {
@@ -1127,4 +1128,60 @@ document.addEventListener('click', (e) => {
   if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) {
     panel.classList.add('hidden');
   }
+});
+
+// 切换房间功能
+function openSwitchRoomModal() {
+  document.getElementById('newRoomIdInput').value = '';
+  document.getElementById('switchRoomModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newRoomIdInput').focus(), 100);
+}
+
+function closeSwitchRoomModal() {
+  document.getElementById('switchRoomModal').classList.add('hidden');
+}
+
+function confirmSwitchRoom() {
+  const newRoomId = document.getElementById('newRoomIdInput').value.trim();
+  if (!newRoomId) {
+    showToast('请输入房间ID', 'error');
+    return;
+  }
+  if (newRoomId === currentRoomId) {
+    showToast('已经在该房间了', 'error');
+    closeSwitchRoomModal();
+    return;
+  }
+
+  // 清空消息列表
+  const container = document.getElementById('messagesContainer');
+  container.innerHTML = '<div id="loadMoreTip" class="load-more-tip">下拉加载更多历史消息...</div>';
+  onlineUsers = [];
+  window.__earliestTimestamp = undefined;
+  hasMoreHistory = true;
+  loadingHistory = false;
+
+  // 更新当前房间
+  currentRoomId = newRoomId;
+  localStorage.setItem('chat_room_id', newRoomId);
+
+  // 更新房间显示
+  document.getElementById('roomBadge').textContent = newRoomId;
+
+  // 加入新房间（服务器会自动处理离开之前的房间）
+  if (socket && socket.connected) {
+    socket.emit('join', { roomId: newRoomId, username, userId });
+  }
+
+  closeSwitchRoomModal();
+  showToast(`已切换到房间: ${newRoomId}`, 'success');
+}
+
+document.getElementById('switchRoomBtn').addEventListener('click', openSwitchRoomModal);
+document.getElementById('switchRoomCloseBtn').addEventListener('click', closeSwitchRoomModal);
+document.querySelector('#switchRoomModal .share-modal-overlay').addEventListener('click', closeSwitchRoomModal);
+document.getElementById('cancelSwitchRoomBtn').addEventListener('click', closeSwitchRoomModal);
+document.getElementById('confirmSwitchRoomBtn').addEventListener('click', confirmSwitchRoom);
+document.getElementById('newRoomIdInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') confirmSwitchRoom();
 });
