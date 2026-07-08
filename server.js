@@ -36,6 +36,9 @@ const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
+const fileCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
+
 async function uploadFileToFirebase(file, folder = 'files') {
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
   const fileData = {
@@ -58,6 +61,8 @@ async function uploadFileToFirebase(file, folder = 'files') {
     throw new Error(`上传失败: ${res.status}`);
   }
   
+  fileCache.set(fileName, { buffer: file.buffer, type: file.mimetype, cachedAt: Date.now() });
+  
   return `/api/file/${encodeURIComponent(fileName)}`;
 }
 
@@ -65,6 +70,16 @@ app.get('/api/file/:fileName', async (req, res) => {
   try {
     const fileName = req.params.fileName;
     const safeFileName = fileName.replace(/\//g, '__').replace(/\./g, '_');
+    
+    const cached = fileCache.get(fileName);
+    if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
+      res.setHeader('Content-Type', cached.type);
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('X-Cache', 'HIT');
+      res.send(cached.buffer);
+      return;
+    }
+    
     const url = `${FIREBASE_DB_URL}/files/${safeFileName}.json${FIREBASE_API_KEY ? `?auth=${FIREBASE_API_KEY}` : ''}`;
     
     const response = await fetch(url, { agent: false });
@@ -78,8 +93,12 @@ app.get('/api/file/:fileName', async (req, res) => {
     }
     
     const buffer = Buffer.from(fileData.base64, 'base64');
+    
+    fileCache.set(fileName, { buffer, type: fileData.type, cachedAt: Date.now() });
+    
     res.setHeader('Content-Type', fileData.type);
     res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('X-Cache', 'MISS');
     res.send(buffer);
   } catch (err) {
     console.error('文件获取失败:', err);
