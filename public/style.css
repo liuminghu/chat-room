@@ -1294,6 +1294,37 @@ body {
   margin-bottom: 20px;
 }
 
+.edit-name-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 20px;
+  transition: all 0.2s;
+  background: var(--bg-main);
+  color: var(--text-primary);
+}
+
+.edit-name-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
+}
+
+.edit-name-input::placeholder {
+  color: var(--text-muted);
+}
+
+.edit-name-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: -12px;
+  margin-bottom: 16px;
+}
+
 .share-card {
   background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
   border-radius: 16px;
