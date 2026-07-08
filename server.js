@@ -461,6 +461,36 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('messageRecalled', { messageId: msg.id });
   });
 
+  socket.on('vote', ({ pollId, optionIndex }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (!room.poll || !room.poll.active) return;
+
+    const poll = room.poll.active;
+    if (poll.id !== pollId) return;
+    if (optionIndex < 0 || optionIndex >= poll.options.length) return;
+
+    const voter = socket.username || socket.id;
+    poll.votes[voter] = optionIndex;
+
+    // 更新消息中的投票数据
+    const pollMsg = room.messages.find(m => m.id == pollId && m.type === 'poll');
+    if (pollMsg && pollMsg.pollData) {
+      pollMsg.pollData.votes = { ...poll.votes };
+    }
+
+    io.to(roomId).emit('pollUpdated', {
+      pollId,
+      votes: poll.votes,
+      options: poll.options,
+      question: poll.question
+    });
+
+    saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
+  });
+
   // 客户端请求加载更早的历史消息
   socket.on('loadMoreHistory', async ({ beforeTimestamp }) => {
     const roomId = socket.roomId;
@@ -717,8 +747,23 @@ async function handleBotCommand(roomId, command, fromUser, rawText) {
         votes: {},
         creator: fromUser
       };
-      const optionsText = command.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
-      sendBotMsg(`📊 投票发起！\n${command.question}\n\n${optionsText}\n\n回复选项编号或名称参与投票！`);
+      const pollMsg = {
+        id: pollId,
+        type: 'poll',
+        username: BOT_NAME,
+        pollData: {
+          id: pollId,
+          question: command.question,
+          options: command.options,
+          votes: {},
+          creator: fromUser
+        },
+        timestamp: Date.now()
+      };
+      room.messages.push(pollMsg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(roomId, pollMsg);
+      io.to(roomId).emit('message', pollMsg);
       saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       break;
     }

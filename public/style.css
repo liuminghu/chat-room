@@ -1456,6 +1456,114 @@ body {
   box-shadow: var(--shadow-md), 0 0 16px rgba(244, 114, 182, 0.3);
 }
 
+/* Poll Message */
+.poll-message {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 8px 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  max-width: 480px;
+  animation: messageIn 0.3s ease-out;
+}
+
+.poll-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.poll-icon {
+  font-size: 20px;
+}
+
+.poll-question {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.poll-option {
+  position: relative;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg-main);
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.poll-option:hover {
+  border-color: var(--primary-light);
+  transform: translateX(4px);
+}
+
+.poll-option.voted {
+  border-color: var(--primary);
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.poll-option-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(255, 107, 107, 0.15) 0%, rgba(255, 142, 83, 0.1) 100%);
+  border-radius: 12px;
+  transition: width 0.5s ease;
+  z-index: 0;
+}
+
+.poll-option-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.poll-option-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.poll-option-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.poll-option-check {
+  position: relative;
+  z-index: 1;
+  margin-left: 6px;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.poll-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 .toast {
   position: fixed;
   bottom: 100px;

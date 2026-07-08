@@ -167,6 +167,10 @@ function connectSocket() {
     }
   });
 
+  socket.on('pollUpdated', ({ pollId, votes, options, question }) => {
+    updatePollDisplay(pollId, votes, options, question);
+  });
+
   socket.on('usernameUpdated', ({ newUsername }) => {
     username = newUsername;
     localStorage.setItem('chat_username', newUsername);
@@ -444,6 +448,11 @@ function displayMessage(message, prepend = false) {
     return;
   }
 
+  if (message.type === 'poll') {
+    renderPollMessage(message, container, prepend);
+    return;
+  }
+
   if (message.recalled) {
     messageDiv.className = 'message system-message';
     messageDiv.dataset.msgId = message.id;
@@ -560,6 +569,109 @@ function displayMessage(message, prepend = false) {
       }
     }
   }
+}
+
+function renderPollMessage(message, container, prepend = false) {
+  const poll = message.pollData;
+  if (!poll) return;
+
+  const totalVotes = Object.keys(poll.votes || {}).length;
+  const counts = new Array(poll.options.length).fill(0);
+  Object.values(poll.votes || {}).forEach(v => {
+    if (v >= 0 && v < poll.options.length) counts[v]++;
+  });
+
+  const myVote = poll.votes ? poll.votes[username] : undefined;
+
+  let optionsHtml = poll.options.map((opt, i) => {
+    const count = counts[i] || 0;
+    const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+    const isVoted = myVote === i;
+    return `
+      <div class="poll-option ${isVoted ? 'voted' : ''}" data-index="${i}" data-poll-id="${poll.id}">
+        <div class="poll-option-bar" style="width: ${percent}%"></div>
+        <div class="poll-option-content">
+          <span class="poll-option-text">${escapeHtml(opt)}</span>
+          <span class="poll-option-count">${count} 票 (${percent}%)</span>
+        </div>
+        ${isVoted ? '<span class="poll-option-check">✓</span>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  const div = document.createElement('div');
+  div.className = 'poll-message';
+  div.dataset.pollId = poll.id;
+  div.innerHTML = `
+    <div class="poll-header">
+      <span class="poll-icon">📊</span>
+      <span class="poll-question">${escapeHtml(poll.question)}</span>
+    </div>
+    <div class="poll-options">${optionsHtml}</div>
+    <div class="poll-footer">
+      <span>${totalVotes} 人参与投票</span>
+      <span>${myVote !== undefined ? '你已投票' : '点击选项投票'}</span>
+    </div>
+  `;
+
+  div.querySelectorAll('.poll-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const idx = parseInt(opt.dataset.index);
+      const pid = opt.dataset.pollId;
+      socket.emit('vote', { pollId: pid, optionIndex: idx });
+    });
+  });
+
+  if (prepend) {
+    container.insertBefore(div, container.firstChild);
+  } else {
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function updatePollDisplay(pollId, votes, options, question) {
+  const pollDiv = document.querySelector(`.poll-message[data-poll-id="${pollId}"]`);
+  if (!pollDiv) return;
+
+  const totalVotes = Object.keys(votes).length;
+  const counts = new Array(options.length).fill(0);
+  Object.values(votes).forEach(v => {
+    if (v >= 0 && v < options.length) counts[v]++;
+  });
+
+  const myVote = votes[username];
+
+  pollDiv.querySelector('.poll-question').textContent = question;
+
+  const optionsContainer = pollDiv.querySelector('.poll-options');
+  optionsContainer.innerHTML = options.map((opt, i) => {
+    const count = counts[i] || 0;
+    const percent = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+    const isVoted = myVote === i;
+    return `
+      <div class="poll-option ${isVoted ? 'voted' : ''}" data-index="${i}" data-poll-id="${pollId}">
+        <div class="poll-option-bar" style="width: ${percent}%"></div>
+        <div class="poll-option-content">
+          <span class="poll-option-text">${escapeHtml(opt)}</span>
+          <span class="poll-option-count">${count} 票 (${percent}%)</span>
+        </div>
+        ${isVoted ? '<span class="poll-option-check">✓</span>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  optionsContainer.querySelectorAll('.poll-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const idx = parseInt(opt.dataset.index);
+      const pid = opt.dataset.pollId;
+      socket.emit('vote', { pollId: pid, optionIndex: idx });
+    });
+  });
+
+  const footerSpans = pollDiv.querySelectorAll('.poll-footer span');
+  if (footerSpans[0]) footerSpans[0].textContent = `${totalVotes} 人参与投票`;
+  if (footerSpans[1]) footerSpans[1].textContent = myVote !== undefined ? '你已投票' : '点击选项投票';
 }
 
 function formatMessageWithMentions(text) {
