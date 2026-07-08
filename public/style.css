@@ -644,16 +644,22 @@ body {
   position: absolute;
   bottom: 100%;
   left: 0;
+  right: 0;
+  max-width: 100%;
   background: var(--bg-card);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   padding: 12px;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   z-index: 100;
   margin-bottom: 8px;
   border: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .emoji-btn {
@@ -664,6 +670,13 @@ body {
   padding: 6px;
   border-radius: 6px;
   transition: background 0.15s;
+  flex-shrink: 0;
+  width: calc(100% / 8);
+  max-width: 40px;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .emoji-btn:hover {
