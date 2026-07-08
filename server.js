@@ -544,7 +544,6 @@ io.on('connection', (socket) => {
     saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
   });
 
-  // 客户端请求加载更早的历史消息
   socket.on('loadMoreHistory', async ({ beforeTimestamp }) => {
     const roomId = socket.roomId;
     if (!roomId) return;
@@ -554,9 +553,20 @@ io.on('connection', (socket) => {
     try {
       const PAGE_SIZE = 20;
       let arr = [];
-      let allMessages = null;
 
-      // 先尝试带查询参数的请求
+      // 先从内存中查找更早的消息
+      const earlierInMemory = room.messages
+        .filter(m => m.timestamp < beforeTimestamp)
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      if (earlierInMemory.length > 0) {
+        arr = earlierInMemory.slice(-PAGE_SIZE);
+        const hasMore = earlierInMemory.length > PAGE_SIZE;
+        socket.emit('moreHistory', { messages: arr, hasMore });
+        return;
+      }
+
+      // 内存中没有更早的消息，从 Firebase 加载
       try {
         const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
         const res = await fetch(url, { agent: false });
@@ -570,12 +580,11 @@ io.on('connection', (socket) => {
         console.warn('Firebase 查询失败，尝试全量加载:', queryErr.message);
       }
 
-      // 如果查询失败或返回为空，尝试全量加载再过滤
       if (arr.length === 0) {
         const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`;
         const res = await fetch(url, { agent: false });
         if (res.ok) {
-          allMessages = await res.json();
+          const allMessages = await res.json();
           if (allMessages) {
             const allArr = Object.values(allMessages)
               .sort((a, b) => a.timestamp - b.timestamp)
@@ -585,20 +594,9 @@ io.on('connection', (socket) => {
         }
       }
 
-      // 计算是否还有更多消息
-      let hasMore = false;
-      if (arr.length >= PAGE_SIZE) {
-        hasMore = true;
-      } else if (allMessages) {
-        // 如果是全量加载的，直接比较总数
-        const totalBefore = Object.values(allMessages).filter(m => m.timestamp < beforeTimestamp).length;
-        hasMore = totalBefore > arr.length;
-      }
-
-      const existingIds = new Set(room.messages.map(m => m.id));
-      const newMsgs = arr.filter(m => !existingIds.has(m.id));
-      room.messages = [...newMsgs, ...room.messages];
-      socket.emit('moreHistory', { messages: newMsgs, hasMore });
+      const hasMore = arr.length >= PAGE_SIZE;
+      room.messages = [...arr, ...room.messages];
+      socket.emit('moreHistory', { messages: arr, hasMore });
     } catch (err) {
       console.error('加载历史消息失败:', err);
       socket.emit('moreHistory', { messages: [], hasMore: false });
