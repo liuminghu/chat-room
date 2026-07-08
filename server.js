@@ -6,8 +6,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { tavily } = require('@tavily/core');
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,52 +36,61 @@ const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
-
-let s3Client = null;
-if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME) {
-  s3Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: R2_ACCESS_KEY_ID,
-      secretAccessKey: R2_SECRET_ACCESS_KEY
-    }
+async function uploadFileToFirebase(file, folder = 'files') {
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
+  const fileData = {
+    name: file.originalname,
+    type: file.mimetype,
+    size: file.size,
+    base64: file.buffer.toString('base64'),
+    uploadedAt: Date.now()
+  };
+  
+  const url = `${FIREBASE_DB_URL}/files/${fileName.replace(/\//g, '__').replace(/\./g, '_')}.json${FIREBASE_API_KEY ? `?auth=${FIREBASE_API_KEY}` : ''}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fileData),
+    agent: false
   });
-  console.log('Cloudflare R2 客户端初始化成功');
-}
-
-async function uploadToR2(file, folder = 'files') {
-  if (!s3Client) {
-    throw new Error('Cloudflare R2 客户端未初始化');
+  
+  if (!res.ok) {
+    throw new Error(`上传失败: ${res.status}`);
   }
   
-  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
-  
-  const upload = new Upload({
-    client: s3Client,
-    params: {
-      Bucket: R2_BUCKET_NAME,
-      Key: fileName,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-      CacheControl: 'public, max-age=31536000'
-    }
-  });
-  
-  await upload.done();
-  
-  return `${R2_PUBLIC_URL}/${fileName}`;
+  return `/api/file/${encodeURIComponent(fileName)}`;
 }
+
+app.get('/api/file/:fileName', async (req, res) => {
+  try {
+    const fileName = req.params.fileName;
+    const safeFileName = fileName.replace(/\//g, '__').replace(/\./g, '_');
+    const url = `${FIREBASE_DB_URL}/files/${safeFileName}.json${FIREBASE_API_KEY ? `?auth=${FIREBASE_API_KEY}` : ''}`;
+    
+    const response = await fetch(url, { agent: false });
+    if (!response.ok) {
+      return res.status(404).json({ ok: false, error: '文件不存在' });
+    }
+    
+    const fileData = await response.json();
+    if (!fileData || !fileData.base64) {
+      return res.status(404).json({ ok: false, error: '文件不存在' });
+    }
+    
+    const buffer = Buffer.from(fileData.base64, 'base64');
+    res.setHeader('Content-Type', fileData.type);
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.send(buffer);
+  } catch (err) {
+    console.error('文件获取失败:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 const multer = require('multer');
 const upload = multer({
   limits: {
-    fileSize: 10 * 1024 * 1024
+    fileSize: 8 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'];
@@ -101,7 +108,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ ok: false, error: '请选择文件' });
     }
     
-    const url = await uploadToR2(req.file, req.body.folder || 'files');
+    const url = await uploadFileToFirebase(req.file, req.body.folder || 'files');
     
     res.json({ ok: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
   } catch (err) {
