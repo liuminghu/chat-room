@@ -245,8 +245,16 @@
       <section id="rooms" class="content-section">
         <div class="section-card">
           <div class="card-header">
-            <h2>房间列表</h2>
-            <span class="card-subtitle">当前运行中的所有房间</span>
+            <div>
+              <h2>房间列表</h2>
+              <span class="card-subtitle">当前运行中的所有房间</span>
+            </div>
+            <div class="card-actions">
+              <button id="clearAllBtn" class="btn btn-danger">
+                <span>🗑️</span>
+                <span>清空全部消息</span>
+              </button>
+            </div>
           </div>
           <div id="roomList" class="room-list">
             <div class="empty-state">

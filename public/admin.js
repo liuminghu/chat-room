@@ -15,6 +15,22 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUsage();
     loadModelConfig();
   });
+
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', () => {
+      showConfirmModal({
+        icon: '⚠️',
+        title: '确认清空全部消息？',
+        desc: '此操作将删除所有房间的消息记录，包括 Firebase 中存储的历史消息。此操作不可撤销！',
+        confirmText: '确认清空',
+        onConfirm: async () => {
+          await clearMessages();
+          loadDashboard();
+        }
+      });
+    });
+  }
 });
 
 function initNavigation() {
@@ -419,18 +435,41 @@ function updateRoomList(rooms) {
           <div class="room-id">Room ID: ${escapeHtml(r.id)}</div>
         </div>
       </div>
-      <div class="room-stats">
-        <div class="room-stat">
-          <span class="room-stat-icon">👥</span>
-          <span>${r.userCount || 0} 人</span>
+      <div class="room-item-actions">
+        <div class="room-stats">
+          <div class="room-stat">
+            <span class="room-stat-icon">👥</span>
+            <span>${r.userCount || 0} 人</span>
+          </div>
+          <div class="room-stat">
+            <span class="room-stat-icon">💬</span>
+            <span>${r.messageCount || 0} 条</span>
+          </div>
         </div>
-        <div class="room-stat">
-          <span class="room-stat-icon">💬</span>
-          <span>${r.messageCount || 0} 条</span>
-        </div>
+        <button class="btn btn-danger btn-sm clear-room-btn" data-room-id="${escapeHtml(r.id)}" data-room-name="${escapeHtml(r.name)}">
+          <span>🗑️</span>
+          <span>清空</span>
+        </button>
       </div>
     </div>
   `).join('');
+
+  list.querySelectorAll('.clear-room-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const roomId = btn.dataset.roomId;
+      const roomName = btn.dataset.roomName;
+      showConfirmModal({
+        icon: '⚠️',
+        title: `确认清空 ${roomName} 的消息？`,
+        desc: `此操作将删除房间 "${roomName}" 的所有消息记录，包括 Firebase 中存储的历史消息。此操作不可撤销！`,
+        confirmText: '确认清空',
+        onConfirm: async () => {
+          await clearMessages(roomId);
+          loadDashboard();
+        }
+      });
+    });
+  });
 }
 
 function escapeHtml(str) {
@@ -438,4 +477,70 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.appendChild(document.createTextNode(str));
   return div.innerHTML;
+}
+
+async function clearMessages(roomId) {
+  try {
+    const body = roomId ? { roomId } : {};
+    const res = await fetch('/api/admin/clear-messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      return true;
+    } else {
+      alert('清空失败: ' + (data.error || '未知错误'));
+      return false;
+    }
+  } catch (err) {
+    alert('清空失败: ' + err.message);
+    return false;
+  }
+}
+
+function showConfirmModal({ icon, title, desc, confirmText, onConfirm }) {
+  const existing = document.getElementById('confirmModal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'confirmModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-icon">${icon || '⚠️'}</div>
+      <div class="modal-title">${title || '确认操作'}</div>
+      <div class="modal-desc">${desc || '此操作不可撤销，请确认继续。'}</div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-cancel" id="modalCancel">取消</button>
+        <button class="modal-btn modal-btn-danger" id="modalConfirm">${confirmText || '确认'}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => {
+    overlay.classList.add('show');
+  });
+
+  const closeModal = () => {
+    overlay.classList.remove('show');
+    setTimeout(() => overlay.remove(), 200);
+  };
+
+  overlay.querySelector('#modalCancel').addEventListener('click', closeModal);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  const confirmBtn = overlay.querySelector('#modalConfirm');
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '处理中...';
+    const result = await onConfirm();
+    closeModal();
+  });
 }

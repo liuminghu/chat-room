@@ -1380,6 +1380,47 @@ async function fetchFirebaseStats() {
   }
 }
 
+app.post('/api/admin/clear-messages', async (req, res) => {
+  const { roomId } = req.body || {};
+
+  try {
+    if (roomId) {
+      const room = rooms.get(roomId);
+      if (room) {
+        room.messages = [];
+      }
+      await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`, {
+        agent: false,
+        method: 'DELETE'
+      });
+      console.log(`已清空房间 ${roomId} 的消息记录`);
+      res.json({ ok: true, clearedRoom: roomId });
+    } else {
+      rooms.forEach(room => {
+        room.messages = [];
+      });
+      const roomsRes = await fetch(`${FIREBASE_DB_URL}/rooms.json`, { agent: false });
+      if (roomsRes.ok) {
+        const roomsData = await roomsRes.json();
+        if (roomsData) {
+          const deletePromises = Object.keys(roomsData).map(id =>
+            fetch(`${FIREBASE_DB_URL}/rooms/${id}/messages.json`, {
+              agent: false,
+              method: 'DELETE'
+            })
+          );
+          await Promise.all(deletePromises);
+        }
+      }
+      console.log('已清空所有房间的消息记录');
+      res.json({ ok: true, clearedAll: true });
+    }
+  } catch (err) {
+    console.error('清空消息失败:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/usage', async (req, res) => {
   const [deepseek, tavily, botStats, firebaseStats] = await Promise.all([
     fetchDeepSeekBalance(), 
