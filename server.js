@@ -1391,6 +1391,7 @@ app.post('/api/admin/clear-messages', async (req, res) => {
         fetch(`${FIREBASE_DB_URL}/config.json`, { agent: false, method: 'DELETE' })
       ]);
       rooms.clear();
+      io.emit('messagesCleared', { level: 'full' });
       console.log('已完全清空 Firebase 所有数据');
       res.json({ ok: true, clearedAll: true, level: 'full' });
     } else if (roomId) {
@@ -1402,6 +1403,7 @@ app.post('/api/admin/clear-messages', async (req, res) => {
         agent: false,
         method: 'DELETE'
       });
+      io.to(roomId).emit('messagesCleared', { roomId });
       console.log(`已清空房间 ${roomId} 的消息记录`);
       res.json({ ok: true, clearedRoom: roomId });
     } else {
@@ -1421,6 +1423,7 @@ app.post('/api/admin/clear-messages', async (req, res) => {
           await Promise.all(deletePromises);
         }
       }
+      io.emit('messagesCleared', { level: 'all' });
       console.log('已清空所有房间的消息记录');
       res.json({ ok: true, clearedAll: true });
     }

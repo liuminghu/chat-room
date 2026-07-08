@@ -204,6 +204,19 @@ function connectSocket() {
   socket.on('announcementUpdated', ({ announcement }) => {
     updateAnnouncementBar(announcement);
   });
+
+  socket.on('messagesCleared', ({ roomId, level }) => {
+    if (roomId && roomId !== currentRoomId) return;
+    
+    const container = document.getElementById('messagesContainer');
+    container.innerHTML = '<div id="loadMoreTip" class="load-more-tip">下拉加载更多历史消息...</div>';
+    onlineUsers = [];
+    window.__earliestTimestamp = undefined;
+    hasMoreHistory = false;
+    loadingHistory = false;
+    
+    showToast('消息记录已被清空', 'success');
+  });
 }
 
 function updateAnnouncementBar(text) {
