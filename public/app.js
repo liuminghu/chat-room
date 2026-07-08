@@ -147,7 +147,11 @@ function connectSocket() {
 
     messages.forEach(msg => displayMessage(msg, true));
 
-    // 保持滚动位置：插入历史消息后让用户视觉位置不变
+    if (messages.length > 0) {
+      const earliest = messages.reduce((min, msg) => msg.timestamp && msg.timestamp < min ? msg.timestamp : min, messages[0].timestamp);
+      window.__earliestTimestamp = earliest;
+    }
+
     requestAnimationFrame(() => {
       const newScrollHeight = container.scrollHeight;
       container.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
@@ -162,7 +166,7 @@ function connectSocket() {
         tip.classList.add('no-more');
       }
     } else {
-      if (tip) tip.textContent = '下拉加载更多历史消息...';
+      if (tip) tip.textContent = '点击加载更多历史消息...';
     }
   });
 
