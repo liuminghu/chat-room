@@ -28,6 +28,113 @@ function getAvatarEmoji(name) {
   return AVATAR_EMOJIS[Math.abs(hash) % AVATAR_EMOJIS.length];
 }
 
+const CacheDB = {
+  db: null,
+  init: function() {
+    return new Promise((resolve, reject) => {
+      if (this.db) {
+        resolve(this.db);
+        return;
+      }
+      const request = indexedDB.open('ChatRoomCache', 1);
+      request.onupgradeneeded = function(e) {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('files')) {
+          const store = db.createObjectStore('files', { keyPath: 'url' });
+          store.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+      };
+      request.onsuccess = function(e) {
+        CacheDB.db = e.target.result;
+        resolve(CacheDB.db);
+      };
+      request.onerror = function(e) {
+        reject(e.target.error);
+      };
+    });
+  },
+  get: async function(url) {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['files'], 'readonly');
+      const store = transaction.objectStore('files');
+      const request = store.get(url);
+      request.onsuccess = function(e) {
+        resolve(e.target.result);
+      };
+      request.onerror = function(e) {
+        reject(e.target.error);
+      };
+    });
+  },
+  set: async function(url, data, type) {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['files'], 'readwrite');
+      const store = transaction.objectStore('files');
+      const request = store.put({
+        url: url,
+        data: data,
+        type: type,
+        timestamp: Date.now()
+      });
+      request.onsuccess = function() {
+        resolve();
+      };
+      request.onerror = function(e) {
+        reject(e.target.error);
+      };
+    });
+  },
+  clearExpired: async function(days = 7) {
+    await this.init();
+    const maxAge = Date.now() - days * 24 * 60 * 60 * 1000;
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['files'], 'readwrite');
+      const store = transaction.objectStore('files');
+      const request = store.openCursor();
+      const deleted = [];
+      request.onsuccess = function(e) {
+        const cursor = e.target.result;
+        if (cursor) {
+          if (cursor.value.timestamp < maxAge) {
+            deleted.push(cursor.value.url);
+            cursor.delete();
+          }
+          cursor.continue();
+        } else {
+          resolve(deleted);
+        }
+      };
+      request.onerror = function(e) {
+        reject(e.target.error);
+      };
+    });
+  },
+  getCacheUrl: async function(url) {
+    const cached = await this.get(url);
+    if (cached) {
+      return URL.createObjectURL(cached.data);
+    }
+    return null;
+  },
+  fetchAndCache: async function(url) {
+    const cachedUrl = await this.getCacheUrl(url);
+    if (cachedUrl) {
+      return cachedUrl;
+    }
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      await this.set(url, blob, blob.type);
+      return URL.createObjectURL(blob);
+    } catch (err) {
+      console.error('缓存获取失败:', err);
+      return url;
+    }
+  }
+};
+
 let username = '';
 let currentRoomId = '';
 let userId = '';
@@ -78,6 +185,8 @@ function connectSocket() {
   socket.on('connect', () => {
     reconnectAttempt = 0;
     updateUserStatus('已连接');
+
+    CacheDB.clearExpired(7).catch(() => {});
 
     if (username && currentRoomId) {
       const container = document.getElementById('messagesContainer');
@@ -631,23 +740,28 @@ async function sendVoiceMessage() {
   document.getElementById('voiceRecorder').classList.add('hidden');
 }
 
-function previewImage(url) {
+async function previewImage(url) {
+  const cachedUrl = await CacheDB.fetchAndCache(url);
   const overlay = document.createElement('div');
   overlay.className = 'image-preview-overlay';
-  overlay.innerHTML = `<img src="${url}" alt="预览">`;
+  overlay.innerHTML = `<img src="${cachedUrl}" alt="预览">`;
   overlay.onclick = () => overlay.remove();
   document.body.appendChild(overlay);
 }
 
 let currentAudio = null;
 
-function toggleAudio(button, url) {
+async function toggleAudio(button) {
+  const originalUrl = button.dataset.originalUrl;
+  if (!originalUrl) return;
+
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
     document.querySelectorAll('.message-audio-play').forEach(btn => btn.textContent = '▶');
   }
-  
+
+  const url = await CacheDB.fetchAndCache(originalUrl);
   const audio = new Audio(url);
   currentAudio = audio;
   
@@ -664,7 +778,11 @@ function toggleAudio(button, url) {
     currentAudio = null;
   };
   
-  audio.play();
+  audio.play().catch(err => {
+    console.error('播放失败:', err);
+    button.textContent = '▶';
+    currentAudio = null;
+  });
 }
 
 function createHeartAnimation(x, y) {
@@ -831,14 +949,14 @@ function displayMessage(message, prepend = false) {
     contentHtml = `
       <div class="message-image-wrapper">
         <div class="message-image-loading">⏳ 图片加载中...</div>
-        <img src="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.textContent='❌ 图片加载失败'">
+        <img data-original-url="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.textContent='❌ 图片加载失败'">
       </div>`;
   } else if (message.type === 'audio' && message.audioUrl) {
     const mins = Math.floor(message.duration / 60).toString().padStart(2, '0');
     const secs = (message.duration % 60).toString().padStart(2, '0');
     contentHtml = `
       <div class="message-audio">
-        <button class="message-audio-play" onclick="toggleAudio(this, '${escapeHtml(message.audioUrl)}')">▶</button>
+        <button class="message-audio-play" data-original-url="${escapeHtml(message.audioUrl)}" onclick="toggleAudio(this)">▶</button>
         <div class="message-audio-progress">
           <div class="message-audio-progress-bar"></div>
         </div>
@@ -908,6 +1026,21 @@ function displayMessage(message, prepend = false) {
   }
   
   updateEarliestTimestamp(message.timestamp);
+
+  if (message.type === 'image' && message.imageUrl) {
+    const img = messageDiv.querySelector('.message-image');
+    if (img) {
+      CacheDB.fetchAndCache(message.imageUrl).then(cachedUrl => {
+        if (img && cachedUrl) {
+          img.src = cachedUrl;
+        }
+      }).catch(() => {
+        if (img) {
+          img.src = message.imageUrl;
+        }
+      });
+    }
+  }
 }
 
 function updateEarliestTimestamp(timestamp) {
