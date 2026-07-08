@@ -248,13 +248,23 @@ async function saveMessageToFirebase(roomId, msg) {
 
 async function loadMessagesFromFirebase(roomId, limit = 50) {
   try {
-    const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&limitToLast=${limit}`;
-    const res = await fetch(url, { agent: false });
-    if (!res.ok) return [];
+    let url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&limitToLast=${limit}`;
+    let res = await fetch(url, { agent: false });
+    
+    if (!res.ok) {
+      console.warn(`Firebase 查询失败，尝试不带参数加载: ${res.status}`);
+      url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`;
+      res = await fetch(url, { agent: false });
+      if (!res.ok) {
+        console.error(`Firebase 加载失败: HTTP ${res.status}`);
+        return [];
+      }
+    }
+    
     const data = await res.json();
     if (!data) return [];
     const arr = Object.values(data);
-    return arr.sort((a, b) => a.timestamp - b.timestamp);
+    return arr.sort((a, b) => a.timestamp - b.timestamp).slice(-limit);
   } catch (err) {
     console.error('Firebase 加载失败:', err);
     return [];
