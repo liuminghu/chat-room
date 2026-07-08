@@ -229,9 +229,23 @@ function shouldTriggerBot(text, username) {
 
 function needsWebSearch(text) {
   if (!TAVILY_API_KEY || !tvly) return false;
-  const keywords = ['天气', '今天', '最新', '现在', '近期', '新闻', '价格', '股价', '行情', '多少岁', '几岁', '身高', '体重', '怎么', '如何', '什么是', '介绍一下', '百度', '搜索', '查一下', '帮我找', '2025', '2026', '今年', '昨天', '明天', '最近'];
   const lowerText = text.toLowerCase();
-  return keywords.some(kw => lowerText.includes(kw));
+
+  // 明确搜索指令：用户明确要求使用搜索功能
+  const explicitSearchKeywords = ['搜索', '查一下', '帮我查', '百度一下', 'google', '谷歌', '必应', '搜索一下', '帮我搜', '搜一下', '查找', '查询'];
+  const hasExplicitSearch = explicitSearchKeywords.some(kw => lowerText.includes(kw));
+
+  // 模糊匹配：内容暗示需要最新信息
+  const implicitKeywords = ['天气', '今天', '最新', '现在', '近期', '新闻', '价格', '股价', '行情', '多少岁', '几岁', '身高', '体重', '怎么', '如何', '什么是', '介绍一下', '2025', '2026', '今年', '昨天', '明天', '最近'];
+  const hasImplicitKeyword = implicitKeywords.some(kw => lowerText.includes(kw));
+
+  return hasExplicitSearch || hasImplicitKeyword;
+}
+
+function hasExplicitSearchRequest(text) {
+  const lowerText = text.toLowerCase();
+  const explicitSearchKeywords = ['搜索', '查一下', '帮我查', '百度一下', 'google', '谷歌', '必应', '搜索一下', '帮我搜', '搜一下', '查找', '查询'];
+  return explicitSearchKeywords.some(kw => lowerText.includes(kw));
 }
 
 async function searchWeb(query) {
@@ -280,11 +294,32 @@ async function handleBotReply(roomId, userText, fromUser) {
 
   try {
     let searchResults = null;
+    const isExplicitSearch = hasExplicitSearchRequest(cleanText);
+
+    if (isExplicitSearch && (!TAVILY_API_KEY || !tvly)) {
+      io.to(roomId).emit('removeTyping', typingMsg.id);
+      const noSearchMsg = {
+        id: Date.now() + Math.random(),
+        type: 'message',
+        username: BOT_NAME,
+        text: `@${fromUser} 抱歉，我目前还没配置联网搜索功能，无法帮你搜索。你可以直接问我问题，我会尽力回答！`,
+        timestamp: Date.now()
+      };
+      const room = rooms.get(roomId);
+      if (room) {
+        room.messages.push(noSearchMsg);
+        if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+        saveMessageToFirebase(roomId, noSearchMsg);
+      }
+      io.to(roomId).emit('message', noSearchMsg);
+      return;
+    }
+
     if (needsWebSearch(cleanText)) {
       searchResults = await searchWeb(cleanText);
     }
 
-    const response = await callDeepSeekAPI(botConversationHistory, searchResults, fromUser);
+    const response = await callDeepSeekAPI(botConversationHistory, searchResults, fromUser, isExplicitSearch);
 
     botConversationHistory.push({
       role: 'assistant',
@@ -330,7 +365,7 @@ async function handleBotReply(roomId, userText, fromUser) {
   }
 }
 
-async function callDeepSeekAPI(messages, searchResults = null, fromUser = '') {
+async function callDeepSeekAPI(messages, searchResults = null, fromUser = '', isExplicitSearch = false) {
   let systemContent = '你是一个友好的群聊助手，叫"小助手"。请用简洁、亲切的语气回答问题。回复不要太长，尽量控制在200字以内。';
   if (fromUser) {
     systemContent += `\n\n你当前正在回复群成员"${fromUser}"，回答时直接给出内容即可，不要在开头加"@"或对方昵称（系统会自动在回复前加上@提问者）。`;
@@ -341,6 +376,8 @@ async function callDeepSeekAPI(messages, searchResults = null, fromUser = '') {
       `[${i+1}] ${r.title}\n${r.content}\n来源: ${r.url}`
     ).join('\n\n');
     systemContent += `\n\n以下是联网搜索到的最新信息，请基于这些信息回答问题：\n${searchContext}\n\n回答时可以在末尾标注信息来源。`;
+  } else if (isExplicitSearch) {
+    systemContent += '\n\n用户明确要求进行联网搜索，但本次搜索未返回有效结果。请如实告知用户未能找到相关信息，并建议用户换个关键词或描述更具体一些。';
   }
 
   const systemPrompt = {
