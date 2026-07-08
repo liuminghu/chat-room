@@ -333,6 +333,13 @@ function sendMessage() {
 
   socket.emit('message', payload);
 
+  const emojiRainKeywords = ['生日快乐', '恭喜', '庆祝', '谢谢', '爱心', '666', '加油', '开心', '爱你', '想你', '晚安', '早安', '下雪', '下雨', '花', '星星', '月亮', '太阳', '彩虹'];
+  emojiRainKeywords.forEach(keyword => {
+    if (text.includes(keyword)) {
+      triggerEmojiRain(keyword);
+    }
+  });
+
   input.value = '';
   input.focus();
   hideMentionList();
@@ -427,6 +434,106 @@ function initPlusPanel() {
       container.removeChild(container.lastChild);
     }
   });
+}
+
+function rollDice() {
+  const dice = Math.floor(Math.random() * 6) + 1;
+  const diceEmoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][dice - 1];
+  socket.emit('sendMessage', { text: `🎲 掷骰子结果：${diceEmoji} ${dice}点` });
+  document.getElementById('plusPanel').classList.add('hidden');
+}
+
+function playRockPaperScissors() {
+  const choices = ['✊', '✋', '✌️'];
+  const myChoice = choices[Math.floor(Math.random() * choices.length)];
+  const botChoice = choices[Math.floor(Math.random() * choices.length)];
+  
+  let result = '';
+  if (myChoice === botChoice) {
+    result = '平局！';
+  } else if (
+    (myChoice === '✊' && botChoice === '✌️') ||
+    (myChoice === '✋' && botChoice === '✊') ||
+    (myChoice === '✌️' && botChoice === '✋')
+  ) {
+    result = '你赢了！🎉';
+  } else {
+    result = '你输了！😢';
+  }
+  
+  socket.emit('sendMessage', { 
+    text: `✊ 石头剪刀布：你出${myChoice}，小助手出${botChoice}，${result}` 
+  });
+  document.getElementById('plusPanel').classList.add('hidden');
+}
+
+function createHeartAnimation(x, y) {
+  const heart = document.createElement('div');
+  heart.className = 'like-heart';
+  heart.textContent = '❤️';
+  heart.style.left = x + 'px';
+  heart.style.top = y + 'px';
+  document.body.appendChild(heart);
+  
+  setTimeout(() => {
+    heart.remove();
+  }, 800);
+}
+
+function triggerEmojiRain(keyword) {
+  const rainEmojis = {
+    '生日快乐': ['🎂', '🎁', '🎉', '🎊', '🎈', '🎀'],
+    '恭喜': ['🎉', '🎊', '👏', '👍', '✨', '🌟'],
+    '庆祝': ['🎉', '🎊', '🎈', '🎆', '🎇', '✨'],
+    '谢谢': ['🙏', '❤️', '😊', '💕', '💖', '💝'],
+    '爱心': ['❤️', '💖', '💕', '💝', '💗', '💘'],
+    '666': ['🔥', '💯', '👍', '👏', '✨', '🌟'],
+    '加油': ['💪', '🔥', '✨', '🌟', '💯', '🌟'],
+    '开心': ['😄', '😆', '🤣', '🥳', '🎉', '✨'],
+    '爱你': ['❤️', '💕', '💖', '💝', '💗', '💘'],
+    '想你': ['💭', '❤️', '💝', '💖', '💕', '💗'],
+    '晚安': ['🌙', '✨', '💤', '😴', '🌛', '⭐'],
+    '早安': ['☀️', '🌅', '🌤️', '✨', '🌟', '🌞'],
+    '下雪': ['❄️', '☃️', '🌨️', '⛄', '💎', '✨'],
+    '下雨': ['🌧️', '🌦️', '💧', '☔', '🌈', '⛈️'],
+    '花': ['🌸', '🌺', '🌹', '🌻', '🌷', '💐'],
+    '星星': ['⭐', '🌟', '✨', '💫', '🌠', '🌌'],
+    '月亮': ['🌙', '🌛', '🌜', '🌚', '⭐', '✨'],
+    '太阳': ['☀️', '🌞', '🌤️', '🔥', '✨', '🌟'],
+    '彩虹': ['🌈', '⭐', '✨', '🌈', '🎨', '🎭']
+  };
+  
+  const emojis = rainEmojis[keyword] || ['🎉', '🎊', '✨', '🌟'];
+  
+  let container = document.getElementById('emojiRainContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'emojiRainContainer';
+    container.className = 'emoji-rain-container';
+    document.body.appendChild(container);
+  }
+  
+  for (let i = 0; i < 30; i++) {
+    setTimeout(() => {
+      const emoji = document.createElement('div');
+      emoji.className = 'emoji-drop';
+      emoji.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      emoji.style.left = Math.random() * 100 + '%';
+      emoji.style.animationDuration = (2 + Math.random() * 2) + 's';
+      emoji.style.animationDelay = Math.random() * 0.5 + 's';
+      container.appendChild(emoji);
+      
+      setTimeout(() => {
+        emoji.remove();
+      }, 4000);
+    }, i * 80);
+  }
+  
+  setTimeout(() => {
+    if (container.children.length === 0) {
+      container.remove();
+    }
+  }, 5000);
 }
 
 function requestLoadMoreHistory() {
@@ -538,7 +645,7 @@ function displayMessage(message, prepend = false) {
     <div class="message-body">
       <div class="message-username">${displayName}</div>
       ${replyHtml}
-      <div class="message-content">${contentHtml}</div>
+      <div class="message-content ${isBot ? 'type-bot' : ''}${message.text.includes('🎲') || message.text.includes('✊') ? ' type-game' : ''}">${contentHtml}</div>
       <div class="message-footer">
         <span class="message-time">${timeStr}</span>
         <div class="message-actions">
@@ -554,7 +661,9 @@ function displayMessage(message, prepend = false) {
 
   const likeBtn = messageDiv.querySelector('.like-action');
   if (likeBtn) {
-    likeBtn.addEventListener('click', () => {
+    likeBtn.addEventListener('click', (e) => {
+      const rect = likeBtn.getBoundingClientRect();
+      createHeartAnimation(rect.left + rect.width / 2, rect.top);
       socket.emit('likeMessage', { messageId: message.id });
     });
   }
@@ -1123,6 +1232,9 @@ window.addEventListener('resize', () => {
     closeMembersSidebar();
   }
 });
+
+document.getElementById('rollDiceBtn').addEventListener('click', rollDice);
+document.getElementById('rockPaperScissorsBtn').addEventListener('click', playRockPaperScissors);
 
 document.getElementById('plusBtn').addEventListener('click', togglePlusPanel);
 document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
