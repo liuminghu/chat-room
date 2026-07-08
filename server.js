@@ -93,9 +93,10 @@ async function loadMessagesFromFirebase(roomId, limit = 50) {
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
-  socket.on('join', async ({ roomId, username }) => {
+  socket.on('join', async ({ roomId, username, userId }) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
     const finalUsername = (username && username.trim()) || '匿名';
+    const finalUserId = userId || socket.id;
 
     // 如果是重连（同一用户重新 join），取消 disconnect 时的延迟离开广播
     if (socket.leaveTimer) {
@@ -110,10 +111,13 @@ io.on('connection', (socket) => {
       if (prevRoom) {
         const prevName = prevRoom.users.get(socket.id);
         prevRoom.users.delete(socket.id);
+        if (prevRoom.userIdMap && socket.userId) {
+          prevRoom.userIdMap.delete(socket.userId);
+        }
         const prevUserList = Array.from(new Set(prevRoom.users.values()));
         io.to(r).emit('userList', prevUserList);
-        // 同房间重连（用户名相同）不广播离开消息
-        if (prevName && (r !== finalRoomId || prevName !== finalUsername)) {
+        // 不同房间切换时才广播离开消息
+        if (prevName && r !== finalRoomId) {
           const leaveMsg = {
             id: Date.now() + Math.random(),
             type: 'system',
@@ -130,15 +134,23 @@ io.on('connection', (socket) => {
     });
 
     const room = await getOrLoadRoom(finalRoomId);
+    if (!room.userIdMap) room.userIdMap = new Map();
 
-    // 判断是否首次加入该房间（同房间内已有同名用户视为重连，不广播加入）
-    const existingUserList = Array.from(new Set(room.users.values()));
-    const isReconnect = existingUserList.includes(finalUsername);
+    // 判断是否重连（同一 userId 已有其他 socket 在线）
+    const oldSocketId = room.userIdMap.get(finalUserId);
+    const isReconnect = !!oldSocketId && oldSocketId !== socket.id;
+
+    // 重连时清理旧 socket 的用户记录
+    if (isReconnect) {
+      room.users.delete(oldSocketId);
+    }
 
     room.users.set(socket.id, finalUsername);
+    room.userIdMap.set(finalUserId, socket.id);
     socket.join(finalRoomId);
     socket.roomId = finalRoomId;
     socket.username = finalUsername;
+    socket.userId = finalUserId;
 
     const userList = Array.from(new Set(room.users.values()));
     io.to(finalRoomId).emit('userList', userList);
@@ -294,16 +306,16 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const roomId = socket.roomId;
     const username = socket.username;
+    const userId = socket.userId;
     if (roomId && username) {
       // 延迟广播"离开"消息，期间重连则取消
       socket.leaveTimer = setTimeout(() => {
         const room = rooms.get(roomId);
         if (!room) return;
-        // 再次确认用户是否真的离线（防止重连后又被广播）
-        // 如果房间内还有同名用户（重连后加入了新 socket），不广播
-        const currentUsers = Array.from(new Set(room.users.values()));
-        if (!currentUsers.includes(username)) {
+        // 如果该 userId 仍绑定在当前 socket（没有被新 socket 覆盖），说明真的离开了
+        if (room.userIdMap && room.userIdMap.get(userId) === socket.id) {
           room.users.delete(socket.id);
+          room.userIdMap.delete(userId);
           const userList = Array.from(new Set(room.users.values()));
           io.to(roomId).emit('userList', userList);
 

@@ -21,6 +21,7 @@ function getAvatarEmoji(name) {
 
 let username = '';
 let currentRoomId = '';
+let userId = '';
 let socket = null;
 let onlineUsers = [];
 let mentionStartPos = -1;
@@ -29,6 +30,15 @@ let typingMessageIds = new Set();
 let replyingTo = null;
 let hasMoreHistory = true;
 let loadingHistory = false;
+
+function getOrCreateUserId() {
+  let uid = localStorage.getItem('chat_user_id');
+  if (!uid) {
+    uid = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    localStorage.setItem('chat_user_id', uid);
+  }
+  return uid;
+}
 
 const EMOJIS = ['😀','😂','🥰','😎','🤔','👍','👏','🔥','❤️','🎉','😭','😡','🤮','🤡','💀','👻','🙈','🙉','🙊','💩','👽','🤖','🎃','🦄','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
 
@@ -61,7 +71,8 @@ function connectSocket() {
     if (username && currentRoomId) {
       document.getElementById('messagesContainer').innerHTML = '';
       onlineUsers = [];
-      socket.emit('join', { roomId: currentRoomId, username: username });
+      if (!userId) userId = getOrCreateUserId();
+      socket.emit('join', { roomId: currentRoomId, username, userId });
     }
   });
 
@@ -630,6 +641,7 @@ window.addEventListener('load', () => {
 function showChatScreen(name, roomId) {
   username = name;
   currentRoomId = roomId;
+  if (!userId) userId = getOrCreateUserId();
 
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatScreen').classList.remove('hidden');
@@ -663,6 +675,7 @@ function joinChat(name, roomId) {
 
   username = nameToUse;
   currentRoomId = roomIdToUse;
+  if (!userId) userId = getOrCreateUserId();
   localStorage.setItem('chat_username', nameToUse);
   localStorage.setItem('chat_room_id', roomIdToUse);
 
@@ -679,7 +692,7 @@ function joinChat(name, roomId) {
     tip.classList.remove('no-more');
   }
 
-  socket.emit('join', { roomId: roomIdToUse, username: nameToUse });
+  socket.emit('join', { roomId: roomIdToUse, username: nameToUse, userId });
 
   document.getElementById('messageInput').focus();
 }
