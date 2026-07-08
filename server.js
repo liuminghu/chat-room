@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
     io.to(finalRoomId).emit('userList', userList);
 
     // 发送历史消息给新加入的用户
-    socket.emit('history', room.messages.slice(-20));
+    socket.emit('history', room.messages.slice(-50));
 
     // 重连时不广播"加入"消息
     if (!isReconnect) {
