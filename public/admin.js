@@ -9,11 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
   loadDashboard();
   loadUsage();
   loadModelConfig();
+  loadStoragePage();
 
   document.getElementById('refreshBtn').addEventListener('click', () => {
     loadDashboard();
     loadUsage();
     loadModelConfig();
+    loadStoragePage();
   });
 
   const clearAllBtn = document.getElementById('clearAllBtn');
@@ -75,6 +77,7 @@ function initNavigation() {
   const titles = {
     dashboard: '系统概览',
     services: '外部服务管理',
+    storage: '文件存储管理',
     usage: '额度管理',
     rooms: '房间管理'
   };
@@ -577,4 +580,203 @@ function showConfirmModal({ icon, title, desc, confirmText, onConfirm }) {
     const result = await onConfirm();
     closeModal();
   });
+}
+
+async function loadStoragePage() {
+  await loadCloudinaryStats();
+  await loadFileList();
+  
+  const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+  if (refreshFilesBtn) {
+    refreshFilesBtn.addEventListener('click', loadFileList);
+  }
+  
+  const clearAllFilesBtn = document.getElementById('clearAllFilesBtn');
+  if (clearAllFilesBtn) {
+    clearAllFilesBtn.addEventListener('click', () => {
+      showConfirmModal({
+        icon: '🗑️',
+        title: '确认清空所有文件？',
+        desc: '此操作将删除 Cloudinary 中 chat-room 文件夹下的所有图片和语音文件。此操作不可撤销！',
+        confirmText: '确认清空',
+        onConfirm: async () => {
+          await clearAllCloudinaryFiles();
+          await loadFileList();
+          await loadCloudinaryStats();
+        }
+      });
+    });
+  }
+}
+
+async function loadCloudinaryStats() {
+  const container = document.getElementById('cloudinaryStats');
+  if (!container) return;
+  
+  try {
+    const res = await fetch('/api/cloudinary-stats');
+    const data = await res.json();
+    
+    if (data.ok && data.stats) {
+      const stats = data.stats;
+      const totalSizeGB = (data.totalSize / (1024 * 1024 * 1024)).toFixed(3);
+      const storageLimitGB = (stats.storage.limit / (1024 * 1024 * 1024)).toFixed(0);
+      const storageUsedGB = (stats.storage.usage / (1024 * 1024 * 1024)).toFixed(3);
+      const storagePercent = ((stats.storage.usage / stats.storage.limit) * 100).toFixed(1);
+      
+      container.innerHTML = `
+        <div class="usage-item">
+          <div class="usage-item-header">
+            <span class="usage-item-name">📦 存储空间</span>
+            <span class="usage-item-value">${storageUsedGB} GB / ${storageLimitGB} GB</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-bar-fill" style="width: ${storagePercent}%; background: linear-gradient(90deg, #6366f1, #8b5cf6);"></div>
+          </div>
+          <div class="usage-item-sub">已使用 ${storagePercent}% | 文件总数: ${stats.objects.usage}</div>
+        </div>
+        <div class="usage-item">
+          <div class="usage-item-header">
+            <span class="usage-item-name">🌐 带宽流量</span>
+            <span class="usage-item-value">${(stats.bandwidth.usage / (1024 * 1024 * 1024)).toFixed(2)} GB / ${(stats.bandwidth.limit / (1024 * 1024 * 1024)).toFixed(0)} GB</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-bar-fill" style="width: ${((stats.bandwidth.usage / stats.bandwidth.limit) * 100).toFixed(1)}%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+          </div>
+        </div>
+        <div class="usage-item">
+          <div class="usage-item-header">
+            <span class="usage-item-name">⭐ 积分额度</span>
+            <span class="usage-item-value">${(stats.credits.usage / 1000).toFixed(2)}K / ${(stats.credits.limit / 1000).toFixed(0)}K</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-bar-fill" style="width: ${((stats.credits.usage / stats.credits.limit) * 100).toFixed(1)}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+          </div>
+        </div>
+        <div class="usage-item">
+          <div class="usage-item-header">
+            <span class="usage-item-name">📊 API 请求数</span>
+            <span class="usage-item-value">${(stats.requests.usage / 1000).toFixed(1)}K / ${(stats.requests.limit / 1000).toFixed(0)}K</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-bar-fill" style="width: ${((stats.requests.usage / stats.requests.limit) * 100).toFixed(1)}%; background: linear-gradient(90deg, #ec4899, #f472b6);"></div>
+          </div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">❌</div>
+          <p>获取存储信息失败</p>
+          <p class="empty-sub">${data.error || '未知错误'}</p>
+        </div>
+      `;
+    }
+  } catch (err) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">❌</div>
+        <p>加载失败</p>
+        <p class="empty-sub">${err.message}</p>
+      </div>
+    `;
+  }
+}
+
+async function loadFileList() {
+  const container = document.getElementById('fileList');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">⏳</div>
+      <p>正在加载文件列表...</p>
+    </div>
+  `;
+  
+  try {
+    const res = await fetch('/api/cloudinary-stats');
+    const data = await res.json();
+    
+    if (data.ok && data.files && data.files.length > 0) {
+      container.innerHTML = data.files.map(file => {
+        const sizeKB = (file.size / 1024).toFixed(1);
+        const typeIcon = file.type === 'video' ? '🎤' : '🖼️';
+        const date = new Date(file.created_at);
+        const dateStr = date.toLocaleString('zh-CN');
+        
+        return `
+          <div class="file-item">
+            <div class="file-icon">${typeIcon}</div>
+            <div class="file-info">
+              <div class="file-name">${escapeHtml(file.public_id.split('/').pop())}</div>
+              <div class="file-meta">
+                <span>${sizeKB} KB</span>
+                ${file.width ? `<span>${file.width}×${file.height}</span>` : ''}
+                <span>${dateStr}</span>
+              </div>
+            </div>
+            <div class="file-actions">
+              <button class="file-action-btn" onclick="window.open('${file.url}', '_blank')">查看</button>
+              <button class="file-action-btn delete" onclick="deleteFile('${file.public_id}', '${file.type}')">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <p>暂无文件</p>
+          <p class="empty-sub">上传的图片和语音会显示在这里</p>
+        </div>
+      `;
+    }
+  } catch (err) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">❌</div>
+        <p>加载失败</p>
+        <p class="empty-sub">${err.message}</p>
+      </div>
+    `;
+  }
+}
+
+async function deleteFile(publicId, type) {
+  if (!confirm('确定要删除这个文件吗？')) return;
+  
+  try {
+    const res = await fetch('/api/admin/delete-file', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publicId, type })
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+      alert('删除成功！');
+      loadFileList();
+      loadCloudinaryStats();
+    } else {
+      alert('删除失败：' + (data.error || '未知错误'));
+    }
+  } catch (err) {
+    alert('删除失败：' + err.message);
+  }
+}
+
+async function clearAllCloudinaryFiles() {
+  try {
+    const res = await fetch('/api/admin/clear-messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: 'cloudinary' })
+    });
+    const data = await res.json();
+    return data.ok;
+  } catch (err) {
+    console.error('清空文件失败:', err);
+    return false;
+  }
 }

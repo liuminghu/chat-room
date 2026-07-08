@@ -123,6 +123,70 @@ app.get('/api/cloudinary-test', async (req, res) => {
   }
 });
 
+app.get('/api/cloudinary-stats', async (req, res) => {
+  try {
+    const usage = await cloudinary.api.usage();
+    const resources = await cloudinary.api.resources({
+      type: 'upload',
+      max_results: 500,
+      direction: -1
+    });
+    
+    let totalSize = 0;
+    const fileList = resources.resources.map(r => {
+      totalSize += r.bytes;
+      return {
+        public_id: r.public_id,
+        url: r.secure_url,
+        size: r.bytes,
+        format: r.format,
+        width: r.width,
+        height: r.height,
+        created_at: r.created_at,
+        type: r.resource_type,
+        folder: r.folder
+      };
+    });
+    
+    res.json({
+      ok: true,
+      stats: {
+        storage: usage.storage,
+        credits: usage.credits,
+        objects: usage.objects,
+        bandwidth: usage.bandwidth,
+        requests: usage.requests
+      },
+      files: fileList,
+      totalSize: totalSize
+    });
+  } catch (err) {
+    console.error('获取Cloudinary存储信息失败:', err);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/delete-file', async (req, res) => {
+  try {
+    const { publicId, type } = req.body;
+    if (!publicId) {
+      return res.status(400).json({ ok: false, error: '缺少文件ID' });
+    }
+    
+    const resourceType = type === 'video' ? 'video' : 'image';
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType
+    });
+    
+    console.log(`🗑️ 删除Cloudinary文件: ${publicId} | 结果: ${result.result}`);
+    
+    res.json({ ok: result.result === 'ok', result });
+  } catch (err) {
+    console.error('删除文件失败:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 const DEEPSEEK_MODELS = [
   { id: 'deepseek-chat', name: 'DeepSeek-V3', desc: '通用聊天模型，平衡性能与速度' },
   { id: 'deepseek-reasoner', name: 'DeepSeek-R1', desc: '推理模型，擅长复杂数学和逻辑推理' }
