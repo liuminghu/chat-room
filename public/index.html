@@ -61,7 +61,7 @@
         </div>
         
         <div class="input-area">
-          <button id="emojiBtn" class="emoji-toggle" title="表情">😊</button>
+          <button id="plusBtn" class="emoji-toggle" title="更多">➕</button>
           <div class="input-wrapper">
             <div id="replyPreview" class="reply-preview hidden">
               <span id="replyPreviewText"></span>
@@ -69,7 +69,26 @@
             </div>
             <input type="text" id="messageInput" placeholder="输入消息... @可艾特" maxlength="500">
             <div id="mentionList" class="mention-list hidden"></div>
-            <div id="emojiPanel" class="emoji-panel hidden"></div>
+            <div id="plusPanel" class="plus-panel hidden">
+              <div class="plus-tabs">
+                <div class="plus-tab active" data-tab="emoji">😊 表情</div>
+                <div class="plus-tab" data-tab="poll">📊 投票</div>
+              </div>
+              <div class="plus-content">
+                <div id="emojiTab" class="plus-tab-content"></div>
+                <div id="pollTab" class="plus-tab-content hidden">
+                  <div class="poll-form">
+                    <input type="text" id="pollQuestion" placeholder="投票问题" maxlength="100">
+                    <div id="pollOptions">
+                      <input type="text" class="poll-option-input" placeholder="选项 1" maxlength="50">
+                      <input type="text" class="poll-option-input" placeholder="选项 2" maxlength="50">
+                    </div>
+                    <button id="addPollOption" class="poll-add-btn">+ 添加选项</button>
+                    <button id="createPollBtn" class="poll-create-btn">发起投票</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <button id="sendBtn">发送</button>
         </div>

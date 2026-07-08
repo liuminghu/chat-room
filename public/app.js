@@ -311,8 +311,8 @@ function cancelReply() {
   document.getElementById('replyPreview').classList.add('hidden');
 }
 
-function toggleEmojiPanel() {
-  const panel = document.getElementById('emojiPanel');
+function togglePlusPanel() {
+  const panel = document.getElementById('plusPanel');
   panel.classList.toggle('hidden');
 }
 
@@ -320,14 +320,74 @@ function insertEmoji(emoji) {
   const input = document.getElementById('messageInput');
   input.value += emoji;
   input.focus();
-  document.getElementById('emojiPanel').classList.add('hidden');
+  document.getElementById('plusPanel').classList.add('hidden');
 }
 
 function renderEmojiPanel() {
-  const panel = document.getElementById('emojiPanel');
+  const panel = document.getElementById('emojiTab');
   panel.innerHTML = EMOJIS.map(e => `<button class="emoji-btn" data-emoji="${e}">${e}</button>`).join('');
   panel.querySelectorAll('.emoji-btn').forEach(btn => {
     btn.addEventListener('click', () => insertEmoji(btn.dataset.emoji));
+  });
+}
+
+function initPlusPanel() {
+  // 标签切换
+  document.querySelectorAll('.plus-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.plus-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.plus-tab-content').forEach(c => c.classList.add('hidden'));
+      document.getElementById(tab.dataset.tab + 'Tab').classList.remove('hidden');
+    });
+  });
+
+  // 添加投票选项
+  document.getElementById('addPollOption').addEventListener('click', () => {
+    const container = document.getElementById('pollOptions');
+    const count = container.children.length + 1;
+    if (count > 8) {
+      showToast('最多8个选项');
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'poll-option-input';
+    input.placeholder = `选项 ${count}`;
+    input.maxLength = 50;
+    container.appendChild(input);
+    input.focus();
+  });
+
+  // 发起投票
+  document.getElementById('createPollBtn').addEventListener('click', () => {
+    const question = document.getElementById('pollQuestion').value.trim();
+    const optionInputs = document.querySelectorAll('.poll-option-input');
+    const options = Array.from(optionInputs).map(i => i.value.trim()).filter(v => v);
+
+    if (!question) {
+      showToast('请输入投票问题');
+      return;
+    }
+    if (options.length < 2) {
+      showToast('至少需要2个选项');
+      return;
+    }
+
+    const cmd = `/投票 ${question} ${options.join(' ')}`;
+    const input = document.getElementById('messageInput');
+    input.value = cmd;
+    document.getElementById('plusPanel').classList.add('hidden');
+    sendMessage();
+
+    // 重置表单
+    document.getElementById('pollQuestion').value = '';
+    optionInputs.forEach(i => i.value = '');
+    // 只保留2个选项
+    const container = document.getElementById('pollOptions');
+    while (container.children.length > 2) {
+      container.removeChild(container.lastChild);
+    }
   });
 }
 
@@ -684,7 +744,7 @@ window.addEventListener('load', () => {
 
   // 阻止移动端下拉刷新（整页 overscroll）
   document.body.addEventListener('touchmove', (e) => {
-    if (e.target.closest('.messages-container, .emoji-panel, .mention-list, .members-list, input, textarea')) {
+    if (e.target.closest('.messages-container, .plus-panel, .mention-list, .members-list, input, textarea')) {
       return;
     }
   }, { passive: true });
@@ -926,7 +986,21 @@ window.addEventListener('resize', () => {
   }
 });
 
-document.getElementById('emojiBtn').addEventListener('click', toggleEmojiPanel);
+document.getElementById('plusBtn').addEventListener('click', togglePlusPanel);
 document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
 
 renderEmojiPanel();
+initPlusPanel();
+
+// 点击面板外部关闭
+let plusPanelOpen = false;
+document.getElementById('plusBtn').addEventListener('click', () => {
+  plusPanelOpen = !document.getElementById('plusPanel').classList.contains('hidden');
+});
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('plusPanel');
+  const btn = document.getElementById('plusBtn');
+  if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) {
+    panel.classList.add('hidden');
+  }
+});
