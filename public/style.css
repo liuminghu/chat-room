@@ -513,26 +513,47 @@ body {
 
 .load-more-tip {
   text-align: center;
-  padding: 12px 0 8px;
-  color: var(--text-muted);
-  font-size: 12px;
+  padding: 10px 16px;
+  margin: 8px auto;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px dashed var(--primary);
+  border-radius: 20px;
+  cursor: pointer;
   user-select: none;
-  pointer-events: none;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  max-width: 200px;
+}
+
+.load-more-tip:hover {
+  background: rgba(255, 107, 107, 0.15);
+  transform: translateY(-1px);
+}
+
+.load-more-tip:active {
+  transform: translateY(0);
 }
 
 .load-more-tip::before {
-  content: '↑';
-  opacity: 0.5;
+  content: '⬆️';
 }
 
 .load-more-tip.no-more {
   color: var(--text-muted);
-  opacity: 0.6;
+  border-color: var(--border);
+  background: transparent;
+  cursor: default;
+}
+
+.load-more-tip.no-more:hover {
+  background: transparent;
+  transform: none;
 }
 
 .load-more-tip.no-more::before {

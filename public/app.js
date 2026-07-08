@@ -849,22 +849,22 @@ window.addEventListener('load', () => {
     document.getElementById('roomIdInput').value = initialRoomId;
   }
 
-  // 挂载下拉加载历史的滚动监听器
+  // 加载更多历史消息 - 点击按钮触发
   const messagesContainer = document.getElementById('messagesContainer');
   if (messagesContainer) {
     messagesContainer.addEventListener('scroll', () => {
-      if (messagesContainer.scrollTop <= 30) {
+      if (messagesContainer.scrollTop <= 5 && hasMoreHistory && !loadingHistory) {
         requestLoadMoreHistory();
       }
     });
   }
 
-  // 阻止移动端下拉刷新（整页 overscroll）
-  document.body.addEventListener('touchmove', (e) => {
-    if (e.target.closest('.messages-container, .plus-panel, .mention-list, .members-list, input, textarea')) {
-      return;
+  document.addEventListener('click', (e) => {
+    const tip = e.target.closest('#loadMoreTip');
+    if (tip && !tip.classList.contains('no-more') && hasMoreHistory && !loadingHistory) {
+      requestLoadMoreHistory();
     }
-  }, { passive: true });
+  });
 
   // 如果本地有登录信息，直接进入聊天界面，后台连接
   if (savedUsername && initialRoomId) {
