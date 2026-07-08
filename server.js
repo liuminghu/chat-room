@@ -587,7 +587,7 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const msg = room.messages.find(m => m.id == messageId);
-    if (!msg || msg.type !== 'message') return;
+    if (!msg || !['message', 'image', 'audio'].includes(msg.type)) return;
     if (msg.userId !== socket.userId) return;
     if (Date.now() - msg.timestamp > 120000) return;
 
