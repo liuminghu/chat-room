@@ -88,12 +88,25 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ ok: false, error: '请选择文件' });
     }
     
+    console.log(`📤 收到文件上传请求 | 文件: ${req.file.originalname} | 类型: ${req.file.mimetype} | 大小: ${(req.file.size / 1024).toFixed(2)}KB`);
+    
     const url = await uploadFileToCloudinary(req.file, req.body.folder || 'chat-room');
     
     res.json({ ok: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
   } catch (err) {
     console.error('文件上传失败:', err);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/cloudinary-test', async (req, res) => {
+  try {
+    const result = await cloudinary.api.ping();
+    console.log('Cloudinary连接测试:', result);
+    res.json({ ok: true, cloudinary: 'connected', result });
+  } catch (err) {
+    console.error('Cloudinary连接失败:', err);
+    res.json({ ok: false, cloudinary: 'disconnected', error: err.message });
   }
 });
 
