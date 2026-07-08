@@ -80,8 +80,12 @@ function connectSocket() {
     updateUserStatus('已连接');
 
     if (username && currentRoomId) {
-      document.getElementById('messagesContainer').innerHTML = '';
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = '<div id="loadMoreTip" class="load-more-tip">下拉加载更多历史消息...</div>';
       onlineUsers = [];
+      window.__earliestTimestamp = undefined;
+      hasMoreHistory = true;
+      loadingHistory = false;
       if (!userId) userId = getOrCreateUserId();
       socket.emit('join', { roomId: currentRoomId, username, userId });
     }
@@ -105,6 +109,20 @@ function connectSocket() {
 
   socket.on('history', (messages) => {
     messages.forEach(msg => displayMessage(msg));
+    
+    if (messages.length > 0) {
+      const earliest = messages.reduce((min, msg) => msg.timestamp && msg.timestamp < min ? msg.timestamp : min, messages[0].timestamp);
+      window.__earliestTimestamp = earliest;
+      
+      if (messages.length >= 50) {
+        hasMoreHistory = true;
+        const tip = document.getElementById('loadMoreTip');
+        if (tip) {
+          tip.textContent = '下拉加载更多历史消息...';
+          tip.classList.remove('no-more');
+        }
+      }
+    }
   });
 
   socket.on('message', (message) => {
@@ -412,6 +430,7 @@ function requestLoadMoreHistory() {
 
 function displayMessage(message, prepend = false) {
   const container = document.getElementById('messagesContainer');
+  const loadMoreTip = document.getElementById('loadMoreTip');
 
   if (message.id && typingMessageIds.has(message.id)) {
     return;
@@ -432,23 +451,18 @@ function displayMessage(message, prepend = false) {
     messageDiv.textContent = message.text;
     messageDiv.title = timeStr;
     if (prepend) {
-      container.insertBefore(messageDiv, container.firstChild);
+      container.insertBefore(messageDiv, loadMoreTip ? loadMoreTip.nextSibling : container.firstChild);
     } else {
       container.appendChild(messageDiv);
       container.scrollTop = container.scrollHeight;
     }
-    if (message.timestamp) {
-      if (window.__earliestTimestamp === undefined) {
-        window.__earliestTimestamp = message.timestamp;
-      } else if (message.timestamp < window.__earliestTimestamp) {
-        window.__earliestTimestamp = message.timestamp;
-      }
-    }
+    updateEarliestTimestamp(message.timestamp);
     return;
   }
 
   if (message.type === 'poll') {
     renderPollMessage(message, container, prepend);
+    updateEarliestTimestamp(message.timestamp);
     return;
   }
 
@@ -457,18 +471,12 @@ function displayMessage(message, prepend = false) {
     messageDiv.dataset.msgId = message.id;
     messageDiv.innerHTML = '<div class="message-recalled">消息已撤回</div>';
     if (prepend) {
-      container.insertBefore(messageDiv, container.firstChild);
+      container.insertBefore(messageDiv, loadMoreTip ? loadMoreTip.nextSibling : container.firstChild);
     } else {
       container.appendChild(messageDiv);
       container.scrollTop = container.scrollHeight;
     }
-    if (message.timestamp) {
-      if (window.__earliestTimestamp === undefined) {
-        window.__earliestTimestamp = message.timestamp;
-      } else if (message.timestamp < window.__earliestTimestamp) {
-        window.__earliestTimestamp = message.timestamp;
-      }
-    }
+    updateEarliestTimestamp(message.timestamp);
     return;
   }
 
@@ -549,24 +557,21 @@ function displayMessage(message, prepend = false) {
   }
 
   if (prepend) {
-    container.insertBefore(messageDiv, container.firstChild);
-    if (message.timestamp) {
-      if (window.__earliestTimestamp === undefined) {
-        window.__earliestTimestamp = message.timestamp;
-      } else if (message.timestamp < window.__earliestTimestamp) {
-        window.__earliestTimestamp = message.timestamp;
-      }
-    }
+    container.insertBefore(messageDiv, loadMoreTip ? loadMoreTip.nextSibling : container.firstChild);
   } else {
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
-    if (message.timestamp) {
-      if (window.__earliestTimestamp === undefined) {
-        window.__earliestTimestamp = message.timestamp;
-      } else if (message.timestamp < window.__earliestTimestamp) {
-        window.__earliestTimestamp = message.timestamp;
-      }
-    }
+  }
+  
+  updateEarliestTimestamp(message.timestamp);
+}
+
+function updateEarliestTimestamp(timestamp) {
+  if (!timestamp) return;
+  if (window.__earliestTimestamp === undefined) {
+    window.__earliestTimestamp = timestamp;
+  } else if (timestamp < window.__earliestTimestamp) {
+    window.__earliestTimestamp = timestamp;
   }
 }
 
@@ -621,8 +626,9 @@ function renderPollMessage(message, container, prepend = false) {
     });
   });
 
+  const loadMoreTip = document.getElementById('loadMoreTip');
   if (prepend) {
-    container.insertBefore(div, container.firstChild);
+    container.insertBefore(div, loadMoreTip ? loadMoreTip.nextSibling : container.firstChild);
   } else {
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
@@ -928,16 +934,12 @@ function joinChat(name, roomId) {
 
   showChatScreen(nameToUse, roomIdToUse);
 
-  document.getElementById('messagesContainer').innerHTML = '';
+  const container = document.getElementById('messagesContainer');
+  container.innerHTML = '<div id="loadMoreTip" class="load-more-tip">下拉加载更多历史消息...</div>';
   onlineUsers = [];
   window.__earliestTimestamp = undefined;
   hasMoreHistory = true;
   loadingHistory = false;
-  const tip = document.getElementById('loadMoreTip');
-  if (tip) {
-    tip.textContent = '下拉加载更多历史消息...';
-    tip.classList.remove('no-more');
-  }
 
   socket.emit('join', { roomId: roomIdToUse, username: nameToUse, userId });
 

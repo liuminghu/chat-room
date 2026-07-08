@@ -538,7 +538,8 @@ io.on('connection', (socket) => {
 
     // 从 Firebase 拉取更早的消息（按 timestamp 范围）
     try {
-      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&endAt=${beforeTimestamp - 1}&limitToLast=20`;
+      const PAGE_SIZE = 20;
+      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
       const res = await fetch(url);
       if (!res.ok) {
         socket.emit('moreHistory', { messages: [], hasMore: false });
@@ -550,9 +551,8 @@ io.on('connection', (socket) => {
         return;
       }
       const arr = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
-      const earliest = room.messages.length > 0 ? room.messages[0].timestamp : beforeTimestamp;
-      const hasMore = arr.length > 0 && arr[0].timestamp > 0;
-      // 把这些消息也存入内存（避免重复加载）
+      // 如果返回的消息数量等于请求的数量，说明可能还有更早的消息
+      const hasMore = arr.length >= PAGE_SIZE;
       const existingIds = new Set(room.messages.map(m => m.id));
       const newMsgs = arr.filter(m => !existingIds.has(m.id));
       room.messages = [...newMsgs, ...room.messages];
