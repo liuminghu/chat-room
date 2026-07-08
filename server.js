@@ -27,6 +27,131 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
 const BOT_NAME = '小助手';
 const DEFAULT_ROOM = 'public';
+const BOT_RATE_LIMIT = 10;
+const BOT_RATE_LIMIT_WINDOW = 60000;
+const BOT_DAILY_LIMIT = 50;
+
+const botRateLimitMap = new Map();
+
+function getTodayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+async function getDailyCount(userId) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`);
+    if (!res.ok) return 0;
+    const data = await res.json();
+    if (!data) return 0;
+    const today = getTodayStr();
+    return data[today] || 0;
+  } catch (err) {
+    console.error('Firebase 读取每日计数失败:', err);
+    return 0;
+  }
+}
+
+async function incrementDailyCount(userId) {
+  try {
+    const today = getTodayStr();
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`);
+    let data = {};
+    if (res.ok) {
+      data = await res.json() || {};
+    }
+    data[today] = (data[today] || 0) + 1;
+    await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch (err) {
+    console.error('Firebase 写入每日计数失败:', err);
+  }
+}
+
+async function checkBotRateLimit(userId, roomId) {
+  const now = Date.now();
+  const today = getTodayStr();
+  
+  const dailyCount = await getDailyCount(userId);
+  if (dailyCount >= BOT_DAILY_LIMIT) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const waitSeconds = Math.ceil((tomorrow.getTime() - now) / 1000);
+    const hours = Math.floor(waitSeconds / 3600);
+    const minutes = Math.floor((waitSeconds % 3600) / 60);
+    return {
+      allowed: false,
+      remaining: 0,
+      resetTime: tomorrow.getTime(),
+      type: 'daily',
+      waitText: hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`
+    };
+  }
+  
+  const key = `${roomId}:${userId}`;
+  
+  let record = botRateLimitMap.get(key);
+  if (!record) {
+    record = { timestamps: [], windowStart: now };
+    botRateLimitMap.set(key, record);
+  }
+  
+  if (now - record.windowStart > BOT_RATE_LIMIT_WINDOW) {
+    record.timestamps = [];
+    record.windowStart = now;
+  }
+  
+  record.timestamps.push(now);
+  
+  if (record.timestamps.length > BOT_RATE_LIMIT) {
+    return { 
+      allowed: false, 
+      remaining: 0, 
+      resetTime: record.windowStart + BOT_RATE_LIMIT_WINDOW,
+      type: 'minute'
+    };
+  }
+  
+  await incrementDailyCount(userId);
+  
+  return { 
+    allowed: true, 
+    remaining: BOT_RATE_LIMIT - record.timestamps.length,
+    dailyRemaining: BOT_DAILY_LIMIT - dailyCount - 1
+  };
+}
+
+const DEFAULT_ANNOUNCEMENT = `欢迎来到聊天室！🤖 小助手可以帮你做这些事情：
+
+🎮 趣味游戏
+• \`/猜谜\` - 来玩猜谜语吧
+• \`/成语接龙\` - 成语接龙挑战
+
+📚 实用工具
+• \`/百科 关键词\` - 百科知识查询
+• \`/签到\` - 每日签到领积分
+• \`/投票 问题 选项1 选项2 ...\` - 发起群投票
+
+💬 AI 对话
+• @小助手 + 问题 - 直接问我任何问题
+• 支持联网搜索最新信息
+
+📢 群管理
+• \`/公告 内容\` - 设置房间公告
+
+点击顶部可以折叠/展开公告哦~`;
+
+const ADJECTIVES = ['快乐的', '活泼的', '可爱的', '聪明的', '勇敢的', '温柔的', '调皮的', '神秘的', '优雅的', '热情的', '冷静的', '机灵的', '憨厚的', '傲娇的', '佛系的', '元气的', '呆萌的', '霸气的', '文艺的', '搞笑的'];
+const ANIMALS = ['小狐狸', '小熊猫', '小兔子', '小老虎', '小狮子', '小企鹅', '小海豚', '小松鼠', '小刺猬', '小考拉', '小水獭', '小柴犬', '小橘猫', '小仓鼠', '小羊驼', '小浣熊', '小鲸鱼', '小海龟', '小蜜蜂', '小蝴蝶'];
+
+function generateRandomNickname() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+  return adj + animal;
+}
 
 let tvly = null;
 if (TAVILY_API_KEY) {
@@ -48,10 +173,15 @@ async function getOrLoadRoom(roomId) {
 
   const loadPromise = (async () => {
     const history = await loadMessagesFromFirebase(roomId, 100);
+    const metadata = await loadRoomMetadata(roomId);
     const room = {
       messages: history,
       users: new Map(),
-      loaded: true
+      loaded: true,
+      announcement: metadata?.announcement || DEFAULT_ANNOUNCEMENT,
+      signins: metadata?.signins || {},
+      poll: metadata?.poll || {},
+      botGame: metadata?.botGame || {}
     };
     rooms.set(roomId, room);
     roomLoadPromises.delete(roomId);
@@ -90,12 +220,36 @@ async function loadMessagesFromFirebase(roomId, limit = 50) {
   }
 }
 
+async function saveRoomMetadata(roomId, metadata) {
+  try {
+    await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/metadata.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metadata)
+    });
+  } catch (err) {
+    console.error('Firebase 保存房间元数据失败:', err);
+  }
+}
+
+async function loadRoomMetadata(roomId) {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/metadata.json`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data || null;
+  } catch (err) {
+    console.error('Firebase 加载房间元数据失败:', err);
+    return null;
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
   socket.on('join', async ({ roomId, username, userId }) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
-    const finalUsername = (username && username.trim()) || '匿名';
+    const finalUsername = (username && username.trim()) || generateRandomNickname();
     const finalUserId = userId || socket.id;
 
     // 如果是重连（同一用户重新 join），取消 disconnect 时的延迟离开广播
@@ -158,6 +312,9 @@ io.on('connection', (socket) => {
     // 发送历史消息给新加入的用户
     socket.emit('history', room.messages.slice(-50));
 
+    // 发送房间公告
+    socket.emit('announcementUpdated', { announcement: room.announcement || null });
+
     // 重连时不广播"加入"消息
     if (!isReconnect) {
       const systemMsg = {
@@ -180,30 +337,6 @@ io.on('connection', (socket) => {
         text: `📢 房间公告: ${room.announcement}`,
         timestamp: Date.now()
       });
-    }
-
-    // 机器人欢迎（只欢迎第一次进入房间的用户）
-    const isNewUser = !room.messages.some(
-      m => m.userId === finalUserId
-    );
-
-    if (isNewUser) {
-      setTimeout(() => {
-        const welcomeMsg = {
-          id: Date.now() + Math.random(),
-          type: 'message',
-          username: BOT_NAME,
-          text: `@${finalUsername} 欢迎来到房间 ${finalRoomId}！有什么问题可以随时问我哦~ 😊`,
-          timestamp: Date.now()
-        };
-        const currentRoom = rooms.get(finalRoomId);
-        if (currentRoom) {
-          currentRoom.messages.push(welcomeMsg);
-          if (currentRoom.messages.length > 500) currentRoom.messages = currentRoom.messages.slice(-500);
-          saveMessageToFirebase(finalRoomId, welcomeMsg);
-          io.to(finalRoomId).emit('message', welcomeMsg);
-        }
-      }, 500);
     }
   });
 
@@ -232,6 +365,27 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('message', msg);
 
     if (shouldTriggerBot(data.text, username)) {
+      const limit = await checkBotRateLimit(userId, roomId);
+      if (!limit.allowed) {
+        let tipText;
+        if (limit.type === 'daily') {
+          tipText = `@${username} 今日对话次数已用完，请${limit.waitText}后再试哦~`;
+        } else {
+          const waitSeconds = Math.ceil((limit.resetTime - Date.now()) / 1000);
+          tipText = `@${username} 您发起对话过于频繁，请 ${waitSeconds} 秒后再试哦~`;
+        }
+        const limitMsg = {
+          id: Date.now() + Math.random(),
+          type: 'message',
+          username: BOT_NAME,
+          text: tipText,
+          timestamp: Date.now()
+        };
+        room.messages.push(limitMsg);
+        if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+        io.to(roomId).emit('message', limitMsg);
+        return;
+      }
       await handleBotReply(roomId, data.text, username);
     }
   });
@@ -303,6 +457,35 @@ io.on('connection', (socket) => {
       console.error('加载历史消息失败:', err);
       socket.emit('moreHistory', { messages: [], hasMore: false });
     }
+  });
+
+  socket.on('updateUsername', ({ newUsername }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const oldUsername = socket.username;
+    const trimmed = (newUsername && newUsername.trim()) || '';
+    if (!trimmed || trimmed === oldUsername) return;
+
+    socket.username = trimmed;
+    room.users.set(socket.id, trimmed);
+
+    const userList = Array.from(new Set(room.users.values()));
+    io.to(roomId).emit('userList', userList);
+
+    const systemMsg = {
+      id: Date.now() + Math.random(),
+      type: 'system',
+      text: `${oldUsername} 改名为 ${trimmed}`,
+      timestamp: Date.now()
+    };
+    room.messages.push(systemMsg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    saveMessageToFirebase(roomId, systemMsg);
+    io.to(roomId).emit('message', systemMsg);
+
+    socket.emit('usernameUpdated', { newUsername: trimmed });
   });
 
   socket.on('disconnect', () => {
@@ -485,6 +668,7 @@ async function handleBotCommand(roomId, command, fromUser, rawText) {
         const points = 10 + (streak > 1 ? streak * 2 : 0);
         sendBotMsg(`签到成功！🎉 获得 ${points} 积分\n连续签到 ${streak} 天，明天继续来签到吧！`);
       }
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       break;
     }
     case 'poll': {
@@ -499,17 +683,14 @@ async function handleBotCommand(roomId, command, fromUser, rawText) {
       };
       const optionsText = command.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
       sendBotMsg(`📊 投票发起！\n${command.question}\n\n${optionsText}\n\n回复选项编号或名称参与投票！`);
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       break;
     }
     case 'announce': {
       room.announcement = command.text;
       sendBotMsg(`📢 房间公告已更新！`);
-      io.to(roomId).emit('message', {
-        id: Date.now() + Math.random(),
-        type: 'system',
-        text: `📢 房间公告: ${command.text}`,
-        timestamp: Date.now()
-      });
+      io.to(roomId).emit('announcementUpdated', { announcement: command.text });
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       break;
     }
   }
@@ -614,6 +795,7 @@ async function handleBotReply(roomId, userText, fromUser) {
       room.messages.push(msg);
       if (room.messages.length > 500) room.messages = room.messages.slice(-500);
       saveMessageToFirebase(roomId, msg);
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       io.to(roomId).emit('message', msg);
     }
     return;
@@ -627,6 +809,7 @@ async function handleBotReply(roomId, userText, fromUser) {
       room.messages.push(msg);
       if (room.messages.length > 500) room.messages = room.messages.slice(-500);
       saveMessageToFirebase(roomId, msg);
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
       io.to(roomId).emit('message', msg);
     }
     return;
@@ -806,8 +989,76 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+async function fetchDeepSeekBalance() {
+  if (!DEEPSEEK_API_KEY) return { configured: false };
+  try {
+    const res = await fetch('https://api.deepseek.com/user/balance', {
+      headers: { 'Authorization': 'Bearer ' + DEEPSEEK_API_KEY }
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { configured: true, ok: false, error: `HTTP ${res.status}: ${text}` };
+    }
+    const data = await res.json();
+    const info = data?.data || data;
+    return {
+      configured: true,
+      ok: true,
+      balance: info?.total_balance || info?.balance || (Array.isArray(info) ? info.map(i => i.balance).reduce((a, b) => a + (Number(b) || 0), 0) : null),
+      currency: info?.currency || 'CNY',
+      raw: info
+    };
+  } catch (err) {
+    return { configured: true, ok: false, error: err.message };
+  }
+}
+
+async function fetchTavilyUsage() {
+  if (!TAVILY_API_KEY) return { configured: false };
+  try {
+    // Tavily 目前主要提供通过 /search 的健康检查，官方暂无公开余额接口；这里通过调用一次最小搜索确认可用并记录剩余额度
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query: 'test',
+        search_depth: 'basic',
+        max_results: 1
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { configured: true, ok: false, error: data?.detail || `HTTP ${res.status}` };
+    }
+    return { configured: true, ok: true, status: '可用' };
+  } catch (err) {
+    return { configured: true, ok: false, error: err.message };
+  }
+}
+
+app.get('/api/usage', async (req, res) => {
+  const [deepseek, tavily] = await Promise.all([fetchDeepSeekBalance(), fetchTavilyUsage()]);
+  res.json({
+    deepseek,
+    tavily,
+    checkedAt: new Date().toISOString()
+  });
+});
+
 server.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
 });
+
+setInterval(() => {
+  rooms.forEach((room, roomId) => {
+    saveRoomMetadata(roomId, {
+      announcement: room.announcement,
+      signins: room.signins,
+      poll: room.poll,
+      botGame: room.botGame
+    });
+  });
+}, 60000);
 
 module.exports = app;

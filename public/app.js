@@ -1,5 +1,14 @@
 const BOT_NAME = '小助手';
 
+const ADJECTIVES = ['快乐的', '活泼的', '可爱的', '聪明的', '勇敢的', '温柔的', '调皮的', '神秘的', '优雅的', '热情的', '冷静的', '机灵的', '憨厚的', '傲娇的', '佛系的', '元气的', '呆萌的', '霸气的', '文艺的', '搞笑的'];
+const ANIMALS = ['小狐狸', '小熊猫', '小兔子', '小老虎', '小狮子', '小企鹅', '小海豚', '小松鼠', '小刺猬', '小考拉', '小水獭', '小柴犬', '小橘猫', '小仓鼠', '小羊驼', '小浣熊', '小鲸鱼', '小海龟', '小蜜蜂', '小蝴蝶'];
+
+function generateRandomNickname() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+  return adj + animal;
+}
+
 const AVATAR_EMOJIS = [
   '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼',
   '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔',
@@ -157,6 +166,45 @@ function connectSocket() {
       msgEl.innerHTML = '<div class="message-recalled">消息已撤回</div>';
     }
   });
+
+  socket.on('usernameUpdated', ({ newUsername }) => {
+    username = newUsername;
+    localStorage.setItem('chat_username', newUsername);
+    showToast(`昵称已改为 ${newUsername}`, 'success');
+  });
+
+  socket.on('announcementUpdated', ({ announcement }) => {
+    updateAnnouncementBar(announcement);
+  });
+}
+
+function updateAnnouncementBar(text) {
+  const bar = document.getElementById('announcementBar');
+  const content = document.getElementById('announcementContent');
+  
+  if (!text) {
+    bar.classList.add('hidden');
+    return;
+  }
+  
+  bar.classList.remove('hidden');
+  content.innerHTML = formatAnnouncement(text);
+}
+
+function formatAnnouncement(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function toggleAnnouncement() {
+  const bar = document.getElementById('announcementBar');
+  bar.classList.toggle('collapsed');
+  const collapsed = bar.classList.contains('collapsed');
+  if (currentRoomId) {
+    localStorage.setItem('announcement_collapsed_' + currentRoomId, collapsed ? '1' : '0');
+  }
 }
 
 function renderMembersList(users) {
@@ -562,6 +610,9 @@ function escapeHtml(text) {
 }
 
 document.getElementById('joinBtn').addEventListener('click', () => joinChat());
+document.getElementById('refreshNameBtn').addEventListener('click', () => {
+  document.getElementById('usernameInput').value = generateRandomNickname();
+});
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
 document.getElementById('usernameInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
@@ -611,6 +662,9 @@ window.addEventListener('load', () => {
 
   if (savedUsername) {
     document.getElementById('usernameInput').value = savedUsername;
+  } else {
+    const randomName = generateRandomNickname();
+    document.getElementById('usernameInput').value = randomName;
   }
 
   const initialRoomId = urlRoomId || savedRoomId;
@@ -656,10 +710,20 @@ function showChatScreen(name, roomId) {
   roomBadge.classList.remove('hidden');
 
   document.getElementById('shareBtn').classList.remove('hidden');
+  document.getElementById('editNameBtn').classList.remove('hidden');
   
   // 移动端显示成员按钮
   if (window.innerWidth <= 600) {
     document.getElementById('membersToggle').classList.remove('hidden');
+  }
+
+  // 恢复公告折叠状态
+  const bar = document.getElementById('announcementBar');
+  const collapsed = localStorage.getItem('announcement_collapsed_' + roomId);
+  if (collapsed === '1') {
+    bar.classList.add('collapsed');
+  } else {
+    bar.classList.remove('collapsed');
   }
 }
 
@@ -813,6 +877,39 @@ document.getElementById('shareCloseBtn').addEventListener('click', closeShareMod
 document.querySelector('.share-modal-overlay').addEventListener('click', closeShareModal);
 document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
 document.getElementById('saveImageBtn').addEventListener('click', saveShareImage);
+
+function openEditNameModal() {
+  document.getElementById('newNameInput').value = username;
+  document.getElementById('editNameModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newNameInput').focus(), 100);
+}
+
+function closeEditNameModal() {
+  document.getElementById('editNameModal').classList.add('hidden');
+}
+
+function confirmEditName() {
+  const newName = document.getElementById('newNameInput').value.trim();
+  if (!newName) {
+    showToast('昵称不能为空', 'error');
+    return;
+  }
+  if (newName === username) {
+    closeEditNameModal();
+    return;
+  }
+  socket.emit('updateUsername', { newUsername: newName });
+  closeEditNameModal();
+}
+
+document.getElementById('editNameBtn').addEventListener('click', openEditNameModal);
+document.getElementById('editNameCloseBtn').addEventListener('click', closeEditNameModal);
+document.getElementById('cancelEditNameBtn').addEventListener('click', closeEditNameModal);
+document.getElementById('confirmEditNameBtn').addEventListener('click', confirmEditName);
+document.getElementById('newNameInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') confirmEditName();
+});
+document.getElementById('announcementToggle').addEventListener('click', toggleAnnouncement);
 
 // 移动端侧边栏
 document.getElementById('membersToggle').addEventListener('click', toggleMembersSidebar);

@@ -7,8 +7,12 @@ const services = [
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   loadDashboard();
+  loadUsage();
 
-  document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+  document.getElementById('refreshBtn').addEventListener('click', () => {
+    loadDashboard();
+    loadUsage();
+  });
 });
 
 function initNavigation() {
@@ -19,6 +23,7 @@ function initNavigation() {
   const titles = {
     dashboard: '系统概览',
     services: '外部服务管理',
+    usage: '额度管理',
     rooms: '房间管理'
   };
 
@@ -93,6 +98,78 @@ function updateServiceStatus(data) {
       </div>
     </div>
   `).join('');
+}
+
+async function loadUsage() {
+  const list = document.getElementById('usageList');
+  const checkedAt = document.getElementById('usageCheckedAt');
+
+  list.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">💰</div>
+      <p>正在查询额度信息...</p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch('/api/usage');
+    const data = await res.json();
+    checkedAt.textContent = data.checkedAt ? `查询时间：${new Date(data.checkedAt).toLocaleString('zh-CN')}` : '--';
+    updateUsageList(data);
+  } catch (err) {
+    checkedAt.textContent = '查询失败';
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>额度查询失败</p>
+        <p class="empty-sub">${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function updateUsageList(data) {
+  const list = document.getElementById('usageList');
+  const providers = [
+    {
+      name: 'DeepSeek AI',
+      icon: '🤖',
+      info: data.deepseek,
+      render: (info) => {
+        if (!info.configured) return { value: '未配置 API Key', status: 'inactive', detail: '请配置 DEEPSEEK_API_KEY 环境变量' };
+        if (!info.ok) return { value: '查询失败', status: 'error', detail: info.error };
+        return {
+          value: info.balance !== null ? `${info.balance} ${info.currency || ''}`.trim() : '余额可用',
+          status: 'active',
+          detail: '账户余额'
+        };
+      }
+    },
+    {
+      name: 'Tavily Search',
+      icon: '🔍',
+      info: data.tavily,
+      render: (info) => {
+        if (!info.configured) return { value: '未配置 API Key', status: 'inactive', detail: '请配置 TAVILY_API_KEY 环境变量' };
+        if (!info.ok) return { value: '查询失败', status: 'error', detail: info.error };
+        return { value: info.status || '可用', status: 'active', detail: '服务可用' };
+      }
+    }
+  ];
+
+  list.innerHTML = providers.map(p => {
+    const { value, status, detail } = p.render(p.info);
+    return `
+      <div class="usage-card">
+        <div class="usage-icon">${p.icon}</div>
+        <div class="usage-info">
+          <div class="usage-name">${p.name}</div>
+          <div class="usage-detail">${escapeHtml(detail)}</div>
+        </div>
+        <div class="usage-value ${status}">${escapeHtml(value)}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function updateRoomList(rooms) {

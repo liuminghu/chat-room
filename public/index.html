@@ -11,6 +11,9 @@
     <header class="header">
       <h1><span id="roomBadge" class="room-badge hidden"></span></h1>
       <div class="header-actions">
+        <button id="editNameBtn" class="share-btn hidden" title="修改昵称">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
         <button id="shareBtn" class="share-btn hidden" title="分享房间">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
         </button>
@@ -36,12 +39,23 @@
         </div>
       </div>
       <input type="text" id="roomIdInput" placeholder="房间ID" maxlength="30">
-      <input type="text" id="usernameInput" placeholder="你的昵称" maxlength="20">
+      <div class="username-input-wrapper">
+        <input type="text" id="usernameInput" placeholder="随机生成，可修改" maxlength="20">
+        <button id="refreshNameBtn" class="refresh-name-btn" title="换一个昵称">🎲</button>
+      </div>
       <button id="joinBtn">加入聊天室</button>
     </div>
 
     <div id="chatScreen" class="chat-screen hidden">
       <div class="chat-content">
+        <div id="announcementBar" class="announcement-bar hidden">
+          <div class="announcement-header" id="announcementToggle">
+            <span class="announcement-icon">📢</span>
+            <span class="announcement-title">房间公告</span>
+            <span class="announcement-arrow" id="announcementArrow">▼</span>
+          </div>
+          <div class="announcement-content" id="announcementContent"></div>
+        </div>
         <div id="messagesContainer" class="messages-container">
           <div id="loadMoreTip" class="load-more-tip">上滑加载更多</div>
         </div>
@@ -97,6 +111,19 @@
       <div class="share-actions">
         <button id="copyLinkBtn" class="share-btn-secondary">复制链接</button>
         <button id="saveImageBtn" class="share-btn-primary">保存图片</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editNameModal" class="share-modal hidden">
+    <div class="share-modal-overlay"></div>
+    <div class="share-modal-content">
+      <button id="editNameCloseBtn" class="share-close-btn">&times;</button>
+      <h3 class="share-title">修改昵称</h3>
+      <input id="newNameInput" type="text" class="login-input" placeholder="输入新昵称" maxlength="20">
+      <div class="share-actions">
+        <button id="cancelEditNameBtn" class="share-btn-secondary">取消</button>
+        <button id="confirmEditNameBtn" class="share-btn-primary">确定</button>
       </div>
     </div>
   </div>
