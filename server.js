@@ -1424,12 +1424,22 @@ async function deleteAllRooms() {
   }
 }
 
+async function tryDeleteRootMessages() {
+  try {
+    await firebaseDelete('/messages');
+    console.log('已删除根级别 messages');
+  } catch (err) {
+    console.warn('删除根级别 messages 失败（可能是权限问题）:', err.message);
+  }
+}
+
 app.post('/api/admin/clear-messages', async (req, res) => {
   const { roomId, level } = req.body || {};
 
   try {
     if (level === 'full') {
       await deleteAllRooms();
+      await tryDeleteRootMessages();
       await firebaseDelete('/botUsage');
       await firebaseDelete('/config');
       rooms.clear();
