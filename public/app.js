@@ -26,6 +26,9 @@ let onlineUsers = [];
 let mentionStartPos = -1;
 let selectedMentionIndex = 0;
 let typingMessageIds = new Set();
+let replyingTo = null;
+
+const EMOJIS = ['😀','😂','🥰','😎','🤔','👍','👏','🔥','❤️','🎉','😭','😡','🤮','🤡','💀','👻','🙈','🙉','🙊','💩','👽','🤖','🎃','🦄','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
 
 function getSocketUrl() {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -94,6 +97,27 @@ function connectSocket() {
     onlineUsers = users;
     renderMembersList(users);
   });
+
+  socket.on('messageLiked', ({ messageId, likes }) => {
+    const msgEl = document.querySelector(`[data-msg-id="${messageId}"]`);
+    if (msgEl) {
+      const likeCount = msgEl.querySelector('.like-count');
+      const likeBtn = msgEl.querySelector('.like-action');
+      if (likeCount) likeCount.textContent = likes.length;
+      if (likeBtn) {
+        const isLiked = likes.includes(username);
+        likeBtn.classList.toggle('liked', isLiked);
+      }
+    }
+  });
+
+  socket.on('messageRecalled', ({ messageId }) => {
+    const msgEl = document.querySelector(`[data-msg-id="${messageId}"]`);
+    if (msgEl) {
+      msgEl.className = 'message system-message';
+      msgEl.innerHTML = '<div class="message-recalled">消息已撤回</div>';
+    }
+  });
 }
 
 function renderMembersList(users) {
@@ -137,19 +161,63 @@ function updateUserStatus(status) {
 function sendMessage() {
   const input = document.getElementById('messageInput');
   const text = input.value.trim();
-  
+
   if (!text || !socket) return;
-  
-  socket.emit('message', { text: text });
-  
+
+  const payload = { text: text };
+  if (replyingTo) {
+    payload.replyTo = {
+      id: replyingTo.id,
+      username: replyingTo.username,
+      text: replyingTo.text.substring(0, 50)
+    };
+    cancelReply();
+  }
+
+  socket.emit('message', payload);
+
   input.value = '';
   input.focus();
   hideMentionList();
 }
 
+function setReplyTo(message) {
+  replyingTo = message;
+  const preview = document.getElementById('replyPreview');
+  const text = document.getElementById('replyPreviewText');
+  text.textContent = `引用 ${message.username}: ${message.text.substring(0, 30)}${message.text.length > 30 ? '...' : ''}`;
+  preview.classList.remove('hidden');
+  document.getElementById('messageInput').focus();
+}
+
+function cancelReply() {
+  replyingTo = null;
+  document.getElementById('replyPreview').classList.add('hidden');
+}
+
+function toggleEmojiPanel() {
+  const panel = document.getElementById('emojiPanel');
+  panel.classList.toggle('hidden');
+}
+
+function insertEmoji(emoji) {
+  const input = document.getElementById('messageInput');
+  input.value += emoji;
+  input.focus();
+  document.getElementById('emojiPanel').classList.add('hidden');
+}
+
+function renderEmojiPanel() {
+  const panel = document.getElementById('emojiPanel');
+  panel.innerHTML = EMOJIS.map(e => `<button class="emoji-btn" data-emoji="${e}">${e}</button>`).join('');
+  panel.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => insertEmoji(btn.dataset.emoji));
+  });
+}
+
 function displayMessage(message) {
   const container = document.getElementById('messagesContainer');
-  
+
   if (message.id && typingMessageIds.has(message.id)) {
     return;
   }
@@ -159,9 +227,11 @@ function displayMessage(message) {
   }
 
   const messageDiv = document.createElement('div');
-  
+
   if (message.type === 'system') {
-    messageDiv.className = 'system-message';
+    const isJoin = message.text.includes('加入了聊天室');
+    const isLeave = message.text.includes('离开了聊天室');
+    messageDiv.className = `system-message ${isJoin ? 'join-effect' : ''} ${isLeave ? 'leave-effect' : ''}`;
     const time = new Date(message.timestamp);
     const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     messageDiv.textContent = message.text;
@@ -170,7 +240,16 @@ function displayMessage(message) {
     container.scrollTop = container.scrollHeight;
     return;
   }
-  
+
+  if (message.recalled) {
+    messageDiv.className = 'message system-message';
+    messageDiv.dataset.msgId = message.id;
+    messageDiv.innerHTML = '<div class="message-recalled">消息已撤回</div>';
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+    return;
+  }
+
   const isSent = message.username === username;
   const isBot = message.username === BOT_NAME;
   const avatar = isBot ? '🤖' : getAvatarEmoji(message.username);
@@ -178,35 +257,75 @@ function displayMessage(message) {
   if (message.id) {
     messageDiv.dataset.msgId = message.id;
   }
-  
+
   const time = new Date(message.timestamp);
   const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-  
+
   if (!onlineUsers.includes(message.username)) {
     onlineUsers.push(message.username);
   }
-  
+
   let displayName = isSent ? '我' : escapeHtml(message.username);
   if (isBot) {
     displayName += '<span class="message-bot-badge">AI</span>';
   }
-  
+
   let contentHtml;
   if (message.type === 'typing') {
     contentHtml = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   } else {
     contentHtml = formatMessageWithMentions(message.text);
   }
-  
+
+  let replyHtml = '';
+  if (message.replyTo) {
+    replyHtml = `<div class="message-reply"><span class="reply-label">引用 ${escapeHtml(message.replyTo.username)}:</span> ${escapeHtml(message.replyTo.text)}</div>`;
+  }
+
+  const likes = message.likes || [];
+  const isLiked = likes.includes(username);
+  const canRecall = isSent && (Date.now() - message.timestamp < 120000);
+
   messageDiv.innerHTML = `
     <div class="message-avatar">${avatar}</div>
     <div class="message-body">
       <div class="message-username">${displayName}</div>
+      ${replyHtml}
       <div class="message-content">${contentHtml}</div>
-      <div class="message-time">${timeStr}</div>
+      <div class="message-footer">
+        <span class="message-time">${timeStr}</span>
+        <div class="message-actions">
+          <button class="msg-action like-action ${isLiked ? 'liked' : ''}" data-msg-id="${message.id}">
+            ${isLiked ? '❤️' : '🤍'} <span class="like-count">${likes.length}</span>
+          </button>
+          ${canRecall ? `<button class="msg-action recall-action" data-msg-id="${message.id}">撤回</button>` : ''}
+          <button class="msg-action reply-action" data-msg-id="${message.id}">引用</button>
+        </div>
+      </div>
     </div>
   `;
-  
+
+  const likeBtn = messageDiv.querySelector('.like-action');
+  if (likeBtn) {
+    likeBtn.addEventListener('click', () => {
+      socket.emit('likeMessage', { messageId: message.id });
+    });
+  }
+
+  const recallBtn = messageDiv.querySelector('.recall-action');
+  if (recallBtn) {
+    recallBtn.addEventListener('click', () => {
+      socket.emit('recallMessage', { messageId: message.id });
+    });
+  }
+
+  const replyBtn = messageDiv.querySelector('.reply-action');
+  if (replyBtn) {
+    replyBtn.addEventListener('click', () => {
+      setReplyTo(message);
+    });
+  }
+
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
 }
@@ -543,3 +662,8 @@ document.getElementById('shareCloseBtn').addEventListener('click', closeShareMod
 document.querySelector('.share-modal-overlay').addEventListener('click', closeShareModal);
 document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
 document.getElementById('saveImageBtn').addEventListener('click', saveShareImage);
+
+document.getElementById('emojiBtn').addEventListener('click', toggleEmojiPanel);
+document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
+
+renderEmojiPanel();

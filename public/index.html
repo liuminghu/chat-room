@@ -30,9 +30,15 @@
         <div id="messagesContainer" class="messages-container"></div>
         
         <div class="input-area">
+          <button id="emojiBtn" class="emoji-toggle" title="表情">😊</button>
           <div class="input-wrapper">
+            <div id="replyPreview" class="reply-preview hidden">
+              <span id="replyPreviewText"></span>
+              <button id="cancelReplyBtn" class="cancel-reply-btn">&times;</button>
+            </div>
             <input type="text" id="messageInput" placeholder="输入消息...  输入 @ 可以艾特别人" maxlength="500">
             <div id="mentionList" class="mention-list hidden"></div>
+            <div id="emojiPanel" class="emoji-panel hidden"></div>
           </div>
           <button id="sendBtn">发送</button>
         </div>

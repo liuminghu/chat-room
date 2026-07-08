@@ -145,6 +145,16 @@ io.on('connection', (socket) => {
     saveMessageToFirebase(finalRoomId, systemMsg);
     io.to(finalRoomId).emit('message', systemMsg);
 
+    // 发送房间公告给新用户
+    if (room.announcement) {
+      socket.emit('message', {
+        id: Date.now() + Math.random(),
+        type: 'system',
+        text: `📢 房间公告: ${room.announcement}`,
+        timestamp: Date.now()
+      });
+    }
+
     // 机器人欢迎（只欢迎第一次进入房间的用户）
     const isNewUser = !room.messages.some(
       m => m.username === finalUsername || (m.type === 'system' && m.text.startsWith(`${finalUsername} `))
@@ -182,7 +192,9 @@ io.on('connection', (socket) => {
       type: 'message',
       username: username,
       text: data.text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      likes: [],
+      replyTo: data.replyTo || null
     };
 
     room.messages.push(msg);
@@ -193,6 +205,41 @@ io.on('connection', (socket) => {
     if (shouldTriggerBot(data.text, username)) {
       await handleBotReply(roomId, data.text, username);
     }
+  });
+
+  socket.on('likeMessage', ({ messageId }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const msg = room.messages.find(m => m.id == messageId);
+    if (!msg || msg.type !== 'message') return;
+
+    const user = room.users.get(socket.id);
+    if (!msg.likes) msg.likes = [];
+    const idx = msg.likes.indexOf(user);
+    if (idx > -1) {
+      msg.likes.splice(idx, 1);
+    } else {
+      msg.likes.push(user);
+    }
+    io.to(roomId).emit('messageLiked', { messageId: msg.id, likes: msg.likes });
+  });
+
+  socket.on('recallMessage', ({ messageId }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const msg = room.messages.find(m => m.id == messageId);
+    if (!msg || msg.type !== 'message') return;
+    if (msg.username !== room.users.get(socket.id)) return;
+    if (Date.now() - msg.timestamp > 120000) return;
+
+    msg.recalled = true;
+    io.to(roomId).emit('messageRecalled', { messageId: msg.id });
   });
 
   socket.on('disconnect', () => {
@@ -263,6 +310,220 @@ async function searchWeb(query) {
   }
 }
 
+// ===== 机器人指令系统 =====
+
+const RIDDLES = [
+  { q: '千条线，万条线，掉到水里看不见。', a: '雨' },
+  { q: '五个兄弟，住在一起，名字不同，高矮不齐。', a: '手指' },
+  { q: '身穿绿衣裳，肚里水汪汪，生的子儿多，个个黑脸膛。', a: '西瓜' },
+  { q: '屋子方方，有门没窗，屋外热烘，屋里冰霜。', a: '冰箱' },
+  { q: '独木造高楼，没瓦没砖头，人在水下走，水在人上流。', a: '雨伞' },
+  { q: '耳朵长，尾巴短，只吃菜，不吃饭。', a: '兔子' },
+  { q: '一物三口，有腿无手，谁要没它，难见亲友。', a: '裤子' },
+  { q: '身披花棉袄，唱歌呱呱叫，田里捉害虫，丰收立功劳。', a: '青蛙' }
+];
+
+const IDIOMS = [
+  '一心一意', '两全其美', '三心二意', '四面八方', '五湖四海',
+  '六神无主', '七上八下', '八面玲珑', '九牛一毛', '十全十美',
+  '画龙点睛', '守株待兔', '亡羊补牢', '掩耳盗铃', '拔苗助长'
+];
+
+function parseBotCommand(text) {
+  const t = text.trim();
+  if (t === '/猜谜' || t === '猜谜') return { cmd: 'riddle' };
+  if (t === '/成语接龙' || t === '成语接龙') return { cmd: 'idiom' };
+  if (t.startsWith('/百科 ') || t.startsWith('百科 ')) return { cmd: 'wiki', keyword: t.replace(/^(\/百科|百科)\s*/, '') };
+  if (t === '/签到' || t === '签到') return { cmd: 'signin' };
+  if (t.startsWith('/投票 ')) {
+    const parts = t.replace('/投票 ', '').split(/\s+/);
+    if (parts.length >= 3) {
+      return { cmd: 'poll', question: parts[0], options: parts.slice(1) };
+    }
+  }
+  if (t.startsWith('/公告 ')) return { cmd: 'announce', text: t.replace(/^\/公告\s*/, '') };
+  return null;
+}
+
+async function handleBotCommand(roomId, command, fromUser, rawText) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  const sendBotMsg = (text) => {
+    const msg = {
+      id: Date.now() + Math.random(),
+      type: 'message',
+      username: BOT_NAME,
+      text: `@${fromUser} ${text}`,
+      timestamp: Date.now()
+    };
+    room.messages.push(msg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    saveMessageToFirebase(roomId, msg);
+    io.to(roomId).emit('message', msg);
+  };
+
+  switch (command.cmd) {
+    case 'riddle': {
+      if (!room.botGame) room.botGame = {};
+      const riddle = RIDDLES[Math.floor(Math.random() * RIDDLES.length)];
+      room.botGame.riddle = { answer: riddle.a, player: fromUser };
+      sendBotMsg(`我来出一个谜语，你来猜！\n\n${riddle.q}\n\n回复"谜底是xxx"来猜答案吧！`);
+      break;
+    }
+    case 'idiom': {
+      if (!room.botGame) room.botGame = {};
+      const idiom = IDIOMS[Math.floor(Math.random() * IDIOMS.length)];
+      room.botGame.idiom = { current: idiom, player: fromUser };
+      sendBotMsg(`成语接龙开始！我先来：${idiom}\n\n请接以"${idiom.slice(-1)}"开头的成语！`);
+      break;
+    }
+    case 'wiki': {
+      if (!DEEPSEEK_API_KEY) {
+        sendBotMsg('抱歉，百科查询功能暂时不可用。');
+        return;
+      }
+      const typingMsg = {
+        id: Date.now() + Math.random(),
+        type: 'typing',
+        username: BOT_NAME,
+        timestamp: Date.now()
+      };
+      io.to(roomId).emit('message', typingMsg);
+
+      try {
+        const response = await callDeepSeekAPI([
+          { role: 'user', content: `请用简洁的语言介绍一下"${command.keyword}"，100字以内。` }
+        ], null, '', false);
+        io.to(roomId).emit('removeTyping', typingMsg.id);
+        sendBotMsg(response);
+      } catch (e) {
+        io.to(roomId).emit('removeTyping', typingMsg.id);
+        sendBotMsg('百科查询失败，请稍后再试。');
+      }
+      break;
+    }
+    case 'signin': {
+      if (!room.signins) room.signins = {};
+      const today = new Date().toISOString().split('T')[0];
+      const userSignin = room.signins[fromUser];
+      if (userSignin && userSignin.date === today) {
+        sendBotMsg(`你今天已经签到过了！连续签到${userSignin.streak}天，继续保持哦~`);
+      } else {
+        const streak = (userSignin && userSignin.date === getPrevDay(today)) ? (userSignin.streak || 0) + 1 : 1;
+        room.signins[fromUser] = { date: today, streak };
+        const points = 10 + (streak > 1 ? streak * 2 : 0);
+        sendBotMsg(`签到成功！🎉 获得 ${points} 积分\n连续签到 ${streak} 天，明天继续来签到吧！`);
+      }
+      break;
+    }
+    case 'poll': {
+      if (!room.poll) room.poll = {};
+      const pollId = Date.now().toString();
+      room.poll.active = {
+        id: pollId,
+        question: command.question,
+        options: command.options,
+        votes: {},
+        creator: fromUser
+      };
+      const optionsText = command.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
+      sendBotMsg(`📊 投票发起！\n${command.question}\n\n${optionsText}\n\n回复选项编号或名称参与投票！`);
+      break;
+    }
+    case 'announce': {
+      room.announcement = command.text;
+      sendBotMsg(`📢 房间公告已更新！`);
+      io.to(roomId).emit('message', {
+        id: Date.now() + Math.random(),
+        type: 'system',
+        text: `📢 房间公告: ${command.text}`,
+        timestamp: Date.now()
+      });
+      break;
+    }
+  }
+}
+
+function getPrevDay(dateStr) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+
+function checkBotGame(roomId, text, fromUser) {
+  const room = rooms.get(roomId);
+  if (!room || !room.botGame) return false;
+
+  const t = text.trim();
+
+  // 猜谜
+  if (room.botGame.riddle && room.botGame.riddle.player === fromUser) {
+    const match = t.match(/谜底是(.+)/);
+    if (match) {
+      const guess = match[1].trim();
+      const answer = room.botGame.riddle.answer;
+      if (guess === answer || guess.includes(answer) || answer.includes(guess)) {
+        delete room.botGame.riddle;
+        return { text: `@${fromUser} 恭喜你答对了！🎉 答案是"${answer}"！` };
+      } else {
+        return { text: `@${fromUser} 不对哦，再想想！提示：答案有${answer.length}个字。` };
+      }
+    }
+  }
+
+  // 成语接龙
+  if (room.botGame.idiom && room.botGame.idiom.player === fromUser) {
+    const currentEnd = room.botGame.idiom.current.slice(-1);
+    if (t.length === 4 && t.startsWith(currentEnd)) {
+      room.botGame.idiom.current = t;
+      room.botGame.idiom.player = fromUser;
+      return { text: `@${fromUser} 接得好！${t}\n\n请接以"${t.slice(-1)}"开头的成语！` };
+    } else if (t.length === 4) {
+      return { text: `@${fromUser} 这个成语不以"${currentEnd}"开头哦，请重新接龙！` };
+    }
+  }
+
+  return false;
+}
+
+function checkPollVote(roomId, text, fromUser) {
+  const room = rooms.get(roomId);
+  if (!room || !room.poll || !room.poll.active) return false;
+
+  const t = text.trim();
+  const poll = room.poll.active;
+
+  // 数字投票
+  const num = parseInt(t);
+  if (!isNaN(num) && num >= 1 && num <= poll.options.length) {
+    poll.votes[fromUser] = num - 1;
+    return { text: `@${fromUser} 投票成功！你选择了"${poll.options[num - 1]}"` };
+  }
+
+  // 文本匹配投票
+  const idx = poll.options.findIndex(o => o === t || t.includes(o));
+  if (idx >= 0) {
+    poll.votes[fromUser] = idx;
+    return { text: `@${fromUser} 投票成功！你选择了"${poll.options[idx]}"` };
+  }
+
+  // 查看投票结果
+  if (t === '投票结果' || t === '/结果') {
+    const counts = new Array(poll.options.length).fill(0);
+    Object.values(poll.votes).forEach(v => counts[v]++);
+    const total = Object.keys(poll.votes).length;
+    const resultText = poll.options.map((o, i) => {
+      const pct = total > 0 ? Math.round((counts[i] / total) * 100) : 0;
+      const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
+      return `${o}: ${bar} ${counts[i]}票 (${pct}%)`;
+    }).join('\n');
+    return { text: `📊 ${poll.question}\n${resultText}\n\n共 ${total} 人参与投票` };
+  }
+
+  return false;
+}
+
 // 每个房间独立的机器人对话历史
 function getBotHistory(roomId) {
   const room = rooms.get(roomId);
@@ -273,6 +534,41 @@ function getBotHistory(roomId) {
 
 async function handleBotReply(roomId, userText, fromUser) {
   const cleanText = userText.replace(/@小助手/g, '').trim();
+
+  // 优先处理游戏和投票
+  const gameResult = checkBotGame(roomId, cleanText, fromUser);
+  if (gameResult) {
+    const room = rooms.get(roomId);
+    if (room) {
+      const msg = { id: Date.now() + Math.random(), type: 'message', username: BOT_NAME, text: gameResult.text, timestamp: Date.now() };
+      room.messages.push(msg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(roomId, msg);
+      io.to(roomId).emit('message', msg);
+    }
+    return;
+  }
+
+  const pollResult = checkPollVote(roomId, cleanText, fromUser);
+  if (pollResult) {
+    const room = rooms.get(roomId);
+    if (room) {
+      const msg = { id: Date.now() + Math.random(), type: 'message', username: BOT_NAME, text: pollResult.text, timestamp: Date.now() };
+      room.messages.push(msg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(roomId, msg);
+      io.to(roomId).emit('message', msg);
+    }
+    return;
+  }
+
+  // 检测指令
+  const command = parseBotCommand(cleanText);
+  if (command) {
+    await handleBotCommand(roomId, command, fromUser, cleanText);
+    return;
+  }
+
   const botConversationHistory = getBotHistory(roomId);
 
   botConversationHistory.push({

@@ -295,8 +295,75 @@ body {
 .message-time {
   font-size: 11px;
   color: #aaa;
-  margin-top: 4px;
   padding: 0 8px;
+}
+
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-actions {
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.msg-action {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  line-height: 1;
+}
+
+.msg-action:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.like-action {
+  color: #999;
+}
+
+.like-action.liked {
+  color: #ff6b6b;
+}
+
+.message-recalled {
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+  padding: 8px;
+}
+
+.message-reply {
+  background: rgba(102, 126, 234, 0.08);
+  border-left: 3px solid #667eea;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-label {
+  color: #667eea;
+  font-weight: 500;
 }
 
 .system-message {
@@ -313,11 +380,89 @@ body {
   border-top: 1px solid #eee;
   gap: 12px;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .input-wrapper {
   flex: 1;
   position: relative;
+}
+
+.emoji-toggle {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.emoji-toggle:hover {
+  background: #f0f2ff;
+}
+
+.emoji-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  z-index: 100;
+  margin-bottom: 8px;
+  max-width: 320px;
+}
+
+.emoji-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.emoji-btn:hover {
+  background: #f0f2ff;
+}
+
+.reply-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #f0f2ff;
+  border-radius: 8px 8px 0 0;
+  font-size: 13px;
+  color: #667eea;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 2;
+}
+
+.cancel-reply-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.cancel-reply-btn:hover {
+  color: #333;
+}
+
+.reply-preview + #messageInput {
+  border-radius: 0 0 25px 25px;
 }
 
 .input-area input {
@@ -433,6 +578,43 @@ body {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+@keyframes joinPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+  50% {
+    transform: scale(1.05) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes leaveFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  100% {
+    opacity: 0.6;
+    transform: translateY(0);
+  }
+}
+
+.join-effect {
+  animation: joinPop 0.5s ease-out;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.leave-effect {
+  animation: leaveFade 0.4s ease-out;
+  color: #999;
+  opacity: 0.6;
 }
 
 .input-area button {
