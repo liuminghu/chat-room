@@ -1030,22 +1030,29 @@ async function fetchDeepSeekBalance() {
 async function fetchTavilyUsage() {
   if (!TAVILY_API_KEY) return { configured: false };
   try {
-    // Tavily 目前主要提供通过 /search 的健康检查，官方暂无公开余额接口；这里通过调用一次最小搜索确认可用并记录剩余额度
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query: 'test',
-        search_depth: 'basic',
-        max_results: 1
-      })
+    const res = await fetch('https://api.tavily.com/usage', {
+      headers: { 'Authorization': 'Bearer ' + TAVILY_API_KEY }
     });
     const data = await res.json();
     if (!res.ok) {
       return { configured: true, ok: false, error: data?.detail || `HTTP ${res.status}` };
     }
-    return { configured: true, ok: true, status: '可用' };
+    
+    const keyUsage = data?.key?.search_usage || 0;
+    const keyLimit = data?.key?.limit;
+    const planUsage = data?.account?.search_usage || 0;
+    const planLimit = data?.account?.plan_limit || 0;
+    const plan = data?.account?.current_plan || 'Unknown';
+    
+    return { 
+      configured: true, 
+      ok: true, 
+      plan,
+      usage: planUsage,
+      limit: planLimit,
+      remaining: planLimit > 0 ? planLimit - planUsage : null,
+      status: planLimit > 0 ? `${planUsage}/${planLimit}` : '可用'
+    };
   } catch (err) {
     return { configured: true, ok: false, error: err.message };
   }

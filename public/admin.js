@@ -201,6 +201,13 @@ function updateUsageList(data) {
       render: (info) => {
         if (!info.configured) return { value: '未配置 API Key', status: 'inactive', detail: '请配置 TAVILY_API_KEY 环境变量' };
         if (!info.ok) return { value: '查询失败', status: 'error', detail: info.error };
+        if (info.limit > 0 && info.remaining !== null) {
+          return { 
+            value: `${info.remaining} 次`, 
+            status: 'active', 
+            detail: `${info.plan} - 已用 ${info.usage}/${info.limit}` 
+          };
+        }
         return { value: info.status || '可用', status: 'active', detail: '服务可用' };
       }
     }
