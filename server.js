@@ -1401,16 +1401,37 @@ async function firebaseDelete(path) {
   }
 }
 
+async function deleteAllRooms() {
+  try {
+    const url = `${FIREBASE_DB_URL}/rooms.json`;
+    const res = await fetch(url, { agent: false });
+    if (!res.ok) {
+      console.error(`Firebase 获取房间列表失败: HTTP ${res.status}`);
+      return;
+    }
+    const roomsData = await res.json();
+    if (!roomsData) {
+      console.log('Firebase 中没有房间数据');
+      return;
+    }
+    const roomIds = Object.keys(roomsData);
+    const deletePromises = roomIds.map(id => firebaseDelete(`/rooms/${id}`));
+    await Promise.all(deletePromises);
+    console.log(`已删除 ${roomIds.length} 个房间`);
+  } catch (err) {
+    console.error('删除所有房间失败:', err.message);
+    throw err;
+  }
+}
+
 app.post('/api/admin/clear-messages', async (req, res) => {
   const { roomId, level } = req.body || {};
 
   try {
     if (level === 'full') {
-      await Promise.all([
-        firebaseDelete('/rooms'),
-        firebaseDelete('/botUsage'),
-        firebaseDelete('/config')
-      ]);
+      await deleteAllRooms();
+      await firebaseDelete('/botUsage');
+      await firebaseDelete('/config');
       rooms.clear();
       io.emit('messagesCleared', { level: 'full' });
       console.log('已完全清空 Firebase 所有数据');
