@@ -551,23 +551,50 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    // 从 Firebase 拉取更早的消息（按 timestamp 范围）
     try {
       const PAGE_SIZE = 20;
-      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
-      const res = await fetch(url, { agent: false });
-      if (!res.ok) {
-        socket.emit('moreHistory', { messages: [], hasMore: false });
-        return;
+      let arr = [];
+      let allMessages = null;
+
+      // 先尝试带查询参数的请求
+      try {
+        const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
+        const res = await fetch(url, { agent: false });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Object.keys(data).length > 0) {
+            arr = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
+          }
+        }
+      } catch (queryErr) {
+        console.warn('Firebase 查询失败，尝试全量加载:', queryErr.message);
       }
-      const data = await res.json();
-      if (!data) {
-        socket.emit('moreHistory', { messages: [], hasMore: false });
-        return;
+
+      // 如果查询失败或返回为空，尝试全量加载再过滤
+      if (arr.length === 0) {
+        const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`;
+        const res = await fetch(url, { agent: false });
+        if (res.ok) {
+          allMessages = await res.json();
+          if (allMessages) {
+            const allArr = Object.values(allMessages)
+              .sort((a, b) => a.timestamp - b.timestamp)
+              .filter(m => m.timestamp < beforeTimestamp);
+            arr = allArr.slice(-PAGE_SIZE);
+          }
+        }
       }
-      const arr = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
-      // 如果返回的消息数量等于请求的数量，说明可能还有更早的消息
-      const hasMore = arr.length >= PAGE_SIZE;
+
+      // 计算是否还有更多消息
+      let hasMore = false;
+      if (arr.length >= PAGE_SIZE) {
+        hasMore = true;
+      } else if (allMessages) {
+        // 如果是全量加载的，直接比较总数
+        const totalBefore = Object.values(allMessages).filter(m => m.timestamp < beforeTimestamp).length;
+        hasMore = totalBefore > arr.length;
+      }
+
       const existingIds = new Set(room.messages.map(m => m.id));
       const newMsgs = arr.filter(m => !existingIds.has(m.id));
       room.messages = [...newMsgs, ...room.messages];
