@@ -36,80 +36,39 @@ const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
-const fileCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000;
+const cloudinary = require('cloudinary').v2;
 
-async function uploadFileToFirebase(file, folder = 'files') {
-  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
-  const fileData = {
-    name: file.originalname,
-    type: file.mimetype,
-    size: file.size,
-    base64: file.buffer.toString('base64'),
-    uploadedAt: Date.now()
-  };
-  
-  const url = `${FIREBASE_DB_URL}/files/${fileName.replace(/\//g, '__').replace(/\./g, '_')}.json${FIREBASE_API_KEY ? `?auth=${FIREBASE_API_KEY}` : ''}`;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fileData),
-    agent: false
-  });
-  
-  if (!res.ok) {
-    throw new Error(`上传失败: ${res.status}`);
-  }
-  
-  fileCache.set(fileName, { buffer: file.buffer, type: file.mimetype, cachedAt: Date.now() });
-  
-  return `/api/file/${encodeURIComponent(fileName)}`;
-}
-
-app.get('/api/file/:fileName', async (req, res) => {
-  try {
-    const fileName = req.params.fileName;
-    const safeFileName = fileName.replace(/\//g, '__').replace(/\./g, '_');
-    
-    const cached = fileCache.get(fileName);
-    if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
-      res.setHeader('Content-Type', cached.type);
-      res.setHeader('Cache-Control', 'public, max-age=31536000');
-      res.setHeader('X-Cache', 'HIT');
-      res.send(cached.buffer);
-      return;
-    }
-    
-    const url = `${FIREBASE_DB_URL}/files/${safeFileName}.json${FIREBASE_API_KEY ? `?auth=${FIREBASE_API_KEY}` : ''}`;
-    
-    const response = await fetch(url, { agent: false });
-    if (!response.ok) {
-      return res.status(404).json({ ok: false, error: '文件不存在' });
-    }
-    
-    const fileData = await response.json();
-    if (!fileData || !fileData.base64) {
-      return res.status(404).json({ ok: false, error: '文件不存在' });
-    }
-    
-    const buffer = Buffer.from(fileData.base64, 'base64');
-    
-    fileCache.set(fileName, { buffer, type: fileData.type, cachedAt: Date.now() });
-    
-    res.setHeader('Content-Type', fileData.type);
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-    res.setHeader('X-Cache', 'MISS');
-    res.send(buffer);
-  } catch (err) {
-    console.error('文件获取失败:', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'ljumhir8',
+  api_key: process.env.CLOUDINARY_API_KEY || '479627123466775',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'khD6_81tONdDi0wKQJYz3BWRWos'
 });
+
+async function uploadFileToCloudinary(file, folder = 'chat-room') {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: file.mimetype.startsWith('image') ? 'image' : 'video',
+        folder: folder,
+        public_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        overwrite: false
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result.secure_url);
+        }
+      }
+    );
+    uploadStream.end(file.buffer);
+  });
+}
 
 const multer = require('multer');
 const upload = multer({
   limits: {
-    fileSize: 8 * 1024 * 1024
+    fileSize: 10 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'];
@@ -127,7 +86,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ ok: false, error: '请选择文件' });
     }
     
-    const url = await uploadFileToFirebase(req.file, req.body.folder || 'files');
+    const url = await uploadFileToCloudinary(req.file, req.body.folder || 'chat-room');
     
     res.json({ ok: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
   } catch (err) {
