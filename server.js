@@ -47,7 +47,7 @@ async function getOrLoadRoom(roomId) {
   }
 
   const loadPromise = (async () => {
-    const history = await loadMessagesFromFirebase(roomId);
+    const history = await loadMessagesFromFirebase(roomId, 100);
     const room = {
       messages: history,
       users: new Map(),
@@ -76,9 +76,9 @@ async function saveMessageToFirebase(roomId, msg) {
   }
 }
 
-async function loadMessagesFromFirebase(roomId) {
+async function loadMessagesFromFirebase(roomId, limit = 50) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=50`);
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?limitToLast=${limit}`);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
@@ -255,6 +255,40 @@ io.on('connection', (socket) => {
 
     msg.recalled = true;
     io.to(roomId).emit('messageRecalled', { messageId: msg.id });
+  });
+
+  // 客户端请求加载更早的历史消息
+  socket.on('loadMoreHistory', async ({ beforeTimestamp }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    // 从 Firebase 拉取更早的消息（按 timestamp 范围）
+    try {
+      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&endAt=${beforeTimestamp - 1}&limitToLast=20`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        socket.emit('moreHistory', { messages: [], hasMore: false });
+        return;
+      }
+      const data = await res.json();
+      if (!data) {
+        socket.emit('moreHistory', { messages: [], hasMore: false });
+        return;
+      }
+      const arr = Object.values(data).sort((a, b) => a.timestamp - b.timestamp);
+      const earliest = room.messages.length > 0 ? room.messages[0].timestamp : beforeTimestamp;
+      const hasMore = arr.length > 0 && arr[0].timestamp > 0;
+      // 把这些消息也存入内存（避免重复加载）
+      const existingIds = new Set(room.messages.map(m => m.id));
+      const newMsgs = arr.filter(m => !existingIds.has(m.id));
+      room.messages = [...newMsgs, ...room.messages];
+      socket.emit('moreHistory', { messages: newMsgs, hasMore });
+    } catch (err) {
+      console.error('加载历史消息失败:', err);
+      socket.emit('moreHistory', { messages: [], hasMore: false });
+    }
   });
 
   socket.on('disconnect', () => {

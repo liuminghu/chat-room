@@ -27,6 +27,8 @@ let mentionStartPos = -1;
 let selectedMentionIndex = 0;
 let typingMessageIds = new Set();
 let replyingTo = null;
+let hasMoreHistory = true;
+let loadingHistory = false;
 
 const EMOJIS = ['😀','😂','🥰','😎','🤔','👍','👏','🔥','❤️','🎉','😭','😡','🤮','🤡','💀','👻','🙈','🙉','🙊','💩','👽','🤖','🎃','🦄','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
 
@@ -96,6 +98,32 @@ function connectSocket() {
   socket.on('userList', (users) => {
     onlineUsers = users;
     renderMembersList(users);
+  });
+
+  socket.on('moreHistory', ({ messages, hasMore }) => {
+    const container = document.getElementById('messagesContainer');
+    const prevScrollHeight = container.scrollHeight;
+    const prevScrollTop = container.scrollTop;
+
+    messages.forEach(msg => displayMessage(msg, true));
+
+    // 保持滚动位置：插入历史消息后让用户视觉位置不变
+    requestAnimationFrame(() => {
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop;
+    });
+
+    loadingHistory = false;
+    const tip = document.getElementById('loadMoreTip');
+    if (!hasMore) {
+      hasMoreHistory = false;
+      if (tip) {
+        tip.textContent = '已经是最早的消息了';
+        tip.classList.add('no-more');
+      }
+    } else {
+      if (tip) tip.textContent = '下拉加载更多历史消息...';
+    }
   });
 
   socket.on('messageLiked', ({ messageId, likes }) => {
@@ -215,7 +243,34 @@ function renderEmojiPanel() {
   });
 }
 
-function displayMessage(message) {
+function requestLoadMoreHistory() {
+  if (!hasMoreHistory || loadingHistory || !socket) return;
+
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+
+  // 找最早的一条消息的 timestamp
+  let earliestTs = null;
+  const firstMsg = container.querySelector('[data-msg-id]');
+  if (firstMsg) {
+    // 从已知集合里取最小 timestamp
+    earliestTs = window.__earliestTimestamp || null;
+  }
+
+  // 如果容器里没消息，从服务器拉取一次
+  if (earliestTs === null) {
+    // 进入聊天时已经拉过 20 条，这里仅做兜底
+    return;
+  }
+
+  loadingHistory = true;
+  const tip = document.getElementById('loadMoreTip');
+  if (tip) tip.textContent = '加载中...';
+
+  socket.emit('loadMoreHistory', { beforeTimestamp: earliestTs });
+}
+
+function displayMessage(message, prepend = false) {
   const container = document.getElementById('messagesContainer');
 
   if (message.id && typingMessageIds.has(message.id)) {
@@ -236,8 +291,15 @@ function displayMessage(message) {
     const timeStr = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     messageDiv.textContent = message.text;
     messageDiv.title = timeStr;
-    container.appendChild(messageDiv);
-    container.scrollTop = container.scrollHeight;
+    if (prepend) {
+      container.insertBefore(messageDiv, container.firstChild);
+    } else {
+      container.appendChild(messageDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
+      window.__earliestTimestamp = message.timestamp;
+    }
     return;
   }
 
@@ -245,8 +307,15 @@ function displayMessage(message) {
     messageDiv.className = 'message system-message';
     messageDiv.dataset.msgId = message.id;
     messageDiv.innerHTML = '<div class="message-recalled">消息已撤回</div>';
-    container.appendChild(messageDiv);
-    container.scrollTop = container.scrollHeight;
+    if (prepend) {
+      container.insertBefore(messageDiv, container.firstChild);
+    } else {
+      container.appendChild(messageDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
+      window.__earliestTimestamp = message.timestamp;
+    }
     return;
   }
 
@@ -326,8 +395,18 @@ function displayMessage(message) {
     });
   }
 
-  container.appendChild(messageDiv);
-  container.scrollTop = container.scrollHeight;
+  if (prepend) {
+    container.insertBefore(messageDiv, container.firstChild);
+    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
+      window.__earliestTimestamp = message.timestamp;
+    }
+  } else {
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
+      window.__earliestTimestamp = message.timestamp;
+    }
+  }
 }
 
 function formatMessageWithMentions(text) {
@@ -494,6 +573,23 @@ window.addEventListener('load', () => {
     document.getElementById('roomIdInput').value = initialRoomId;
   }
 
+  // 挂载下拉加载历史的滚动监听器
+  const messagesContainer = document.getElementById('messagesContainer');
+  if (messagesContainer) {
+    messagesContainer.addEventListener('scroll', () => {
+      if (messagesContainer.scrollTop <= 30) {
+        requestLoadMoreHistory();
+      }
+    });
+  }
+
+  // 阻止移动端下拉刷新（整页 overscroll）
+  document.body.addEventListener('touchmove', (e) => {
+    if (e.target.closest('.messages-container, .emoji-panel, .mention-list, .members-list, input, textarea')) {
+      return;
+    }
+  }, { passive: true });
+
   // 如果本地有登录信息，直接进入聊天界面，后台连接
   if (savedUsername && initialRoomId) {
     showChatScreen(savedUsername, initialRoomId);
@@ -503,6 +599,8 @@ window.addEventListener('load', () => {
 
   socket.on('connect', () => {
     if (savedUsername && initialRoomId) {
+      window.__earliestTimestamp = undefined;
+      hasMoreHistory = true;
       socket.emit('join', { roomId: initialRoomId, username: savedUsername });
       document.getElementById('messageInput').focus();
     }
@@ -547,6 +645,14 @@ function joinChat(name, roomId) {
 
   document.getElementById('messagesContainer').innerHTML = '';
   onlineUsers = [];
+  window.__earliestTimestamp = undefined;
+  hasMoreHistory = true;
+  loadingHistory = false;
+  const tip = document.getElementById('loadMoreTip');
+  if (tip) {
+    tip.textContent = '下拉加载更多历史消息...';
+    tip.classList.remove('no-more');
+  }
 
   socket.emit('join', { roomId: roomIdToUse, username: nameToUse });
 

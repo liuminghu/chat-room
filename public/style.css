@@ -13,6 +13,11 @@ body {
   justify-content: center;
   align-items: center;
   padding: 20px;
+  overscroll-behavior: none;
+}
+
+html {
+  overscroll-behavior: none;
 }
 
 .container {
@@ -228,6 +233,23 @@ body {
   overflow-y: auto;
   background: #f7f8fa;
   min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.load-more-tip {
+  text-align: center;
+  padding: 12px 0;
+  color: #999;
+  font-size: 12px;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.load-more-tip.no-more {
+  color: #bbb;
+  font-style: italic;
 }
 
 .message {
