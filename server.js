@@ -775,12 +775,32 @@ async function callDeepSeekAPI(messages, searchResults = null, fromUser = '', is
 }
 
 app.get('/api/health', (req, res) => {
+  let totalUsers = 0;
+  let totalMessages = 0;
+  const roomsInfo = [];
+
+  rooms.forEach((room, roomId) => {
+    const userCount = room.users.size;
+    const msgCount = room.messages.length;
+    totalUsers += userCount;
+    totalMessages += msgCount;
+    roomsInfo.push({
+      id: roomId,
+      name: roomId,
+      userCount,
+      messageCount: msgCount
+    });
+  });
+
   res.json({
     status: 'ok',
     rooms: rooms.size,
+    totalUsers,
+    totalMessages,
     hasDeepSeekKey: !!DEEPSEEK_API_KEY,
     hasTavilyKey: !!TAVILY_API_KEY,
-    firebaseEnabled: !!FIREBASE_DB_URL
+    firebaseEnabled: !!FIREBASE_DB_URL,
+    roomsInfo
   });
 });
 
