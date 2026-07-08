@@ -55,8 +55,10 @@ async function uploadFileToCloudinary(file, folder = 'chat-room') {
       },
       (error, result) => {
         if (error) {
+          console.error(`❌ Cloudinary上传失败 | 文件: ${file.originalname} | 大小: ${(file.size / 1024).toFixed(2)}KB | 错误: ${error.message}`);
           reject(error);
         } else {
+          console.log(`✅ Cloudinary上传成功 | 文件: ${file.originalname} | 大小: ${(file.size / 1024).toFixed(2)}KB | URL: ${result.secure_url} | 宽度: ${result.width || '-'} | 高度: ${result.height || '-'}`);
           resolve(result.secure_url);
         }
       }
