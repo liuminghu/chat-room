@@ -45,7 +45,7 @@ const botRateLimitMap = new Map();
 
 async function loadAppConfig() {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/config/app.json`);
+    const res = await fetch(`${FIREBASE_DB_URL}/config/app.json`, { agent: false });
     if (res.ok) {
       const data = await res.json();
       if (data) {
@@ -61,6 +61,7 @@ async function loadAppConfig() {
 async function saveAppConfig() {
   try {
     await fetch(`${FIREBASE_DB_URL}/config/app.json`, {
+      agent: false,
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(appConfig)
@@ -76,7 +77,7 @@ function getTodayStr() {
 
 async function getDailyCount(userId) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`);
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`, { agent: false });
     if (!res.ok) return 0;
     const data = await res.json();
     if (!data) return 0;
@@ -91,13 +92,14 @@ async function getDailyCount(userId) {
 async function incrementDailyCount(userId) {
   try {
     const today = getTodayStr();
-    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`);
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`, { agent: false });
     let data = {};
     if (res.ok) {
       data = await res.json() || {};
     }
     data[today] = (data[today] || 0) + 1;
     await fetch(`${FIREBASE_DB_URL}/botUsage/${userId}.json`, {
+      agent: false,
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -234,6 +236,7 @@ async function getOrLoadRoom(roomId) {
 async function saveMessageToFirebase(roomId, msg) {
   try {
     await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json`, {
+      agent: false,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg)
@@ -245,7 +248,8 @@ async function saveMessageToFirebase(roomId, msg) {
 
 async function loadMessagesFromFirebase(roomId, limit = 50) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&limitToLast=${limit}`);
+    const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&limitToLast=${limit}`;
+    const res = await fetch(url, { agent: false });
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
@@ -260,6 +264,7 @@ async function loadMessagesFromFirebase(roomId, limit = 50) {
 async function saveRoomMetadata(roomId, metadata) {
   try {
     await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/metadata.json`, {
+      agent: false,
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(metadata)
@@ -271,7 +276,7 @@ async function saveRoomMetadata(roomId, metadata) {
 
 async function loadRoomMetadata(roomId) {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/metadata.json`);
+    const res = await fetch(`${FIREBASE_DB_URL}/rooms/${roomId}/metadata.json`, { agent: false });
     if (!res.ok) return null;
     const data = await res.json();
     return data || null;
@@ -539,8 +544,8 @@ io.on('connection', (socket) => {
     // 从 Firebase 拉取更早的消息（按 timestamp 范围）
     try {
       const PAGE_SIZE = 20;
-      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy="timestamp"&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
-      const res = await fetch(url);
+      const url = `${FIREBASE_DB_URL}/rooms/${roomId}/messages.json?orderBy=%22timestamp%22&endAt=${beforeTimestamp - 1}&limitToLast=${PAGE_SIZE}`;
+      const res = await fetch(url, { agent: false });
       if (!res.ok) {
         socket.emit('moreHistory', { messages: [], hasMore: false });
         return;
@@ -1180,7 +1185,7 @@ async function fetchTavilyUsage() {
 
 async function fetchBotUsageStats() {
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/botUsage.json`);
+    const res = await fetch(`${FIREBASE_DB_URL}/botUsage.json`, { agent: false });
     if (!res.ok) return { error: `HTTP ${res.status}` };
     const data = await res.json();
     if (!data) return { todayTotal: 0, users: 0 };
@@ -1230,9 +1235,9 @@ app.put('/api/config', async (req, res) => {
 async function fetchFirebaseStats() {
   try {
     const [botUsageRes, roomsRes, configRes] = await Promise.all([
-      fetch(`${FIREBASE_DB_URL}/botUsage.json`),
-      fetch(`${FIREBASE_DB_URL}/rooms.json`),
-      fetch(`${FIREBASE_DB_URL}/config/app.json`)
+      fetch(`${FIREBASE_DB_URL}/botUsage.json`, { agent: false }),
+      fetch(`${FIREBASE_DB_URL}/rooms.json`, { agent: false }),
+      fetch(`${FIREBASE_DB_URL}/config/app.json`, { agent: false })
     ]);
 
     const botUsage = botUsageRes.ok ? await botUsageRes.json() : null;
