@@ -496,9 +496,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-async function clearMessages(roomId) {
+async function clearMessages(roomId, level) {
   try {
-    const body = roomId ? { roomId } : {};
+    const body = roomId ? { roomId } : (level ? { level } : {});
     const res = await fetch('/api/admin/clear-messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
