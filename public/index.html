@@ -77,6 +77,7 @@
                 <div class="plus-tab active" data-tab="emoji">😊 表情</div>
                 <div class="plus-tab" data-tab="poll">📊 投票</div>
                 <div class="plus-tab" data-tab="game">🎲 游戏</div>
+                <div class="plus-tab" data-tab="media">🖼️ 媒体</div>
               </div>
               <div class="plus-content">
                 <div id="emojiTab" class="plus-tab-content"></div>
@@ -105,10 +106,37 @@
                     </div>
                   </div>
                 </div>
+                <div id="media" class="plus-tab-content hidden">
+                  <div class="media-panel">
+                    <div class="media-item" id="uploadImageBtn">
+                      <span class="media-icon">🖼️</span>
+                      <span class="media-name">发送图片</span>
+                      <span class="media-desc">选择本地图片</span>
+                    </div>
+                    <div class="media-item" id="recordVoiceBtn">
+                      <span class="media-icon">🎤</span>
+                      <span class="media-name">发送语音</span>
+                      <span class="media-desc">录制语音消息</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           <button id="sendBtn">发送</button>
+        </div>
+        <input type="file" id="imageInput" class="hidden" accept="image/*">
+        <div id="voiceRecorder" class="voice-recorder hidden">
+          <div class="voice-wave">
+            <span class="voice-bar"></span>
+            <span class="voice-bar"></span>
+            <span class="voice-bar"></span>
+            <span class="voice-bar"></span>
+            <span class="voice-bar"></span>
+          </div>
+          <span class="voice-timer">00:00</span>
+          <button id="cancelVoiceBtn" class="voice-cancel">✕</button>
+          <button id="sendVoiceBtn" class="voice-send">✓</button>
         </div>
       </div>
       

@@ -3,6 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { tavily } = require('@tavily/core');
+const admin = require('firebase-admin');
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,11 +29,81 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
+const FIREBASE_STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'chat-room-demo-e837c.appspot.com';
+const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || '';
 const BOT_NAME = '小助手';
 const DEFAULT_ROOM = 'public';
 const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
+
+if (FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    const serviceAccount = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: FIREBASE_STORAGE_BUCKET
+    });
+    console.log('Firebase Admin SDK 初始化成功');
+  } catch (e) {
+    console.error('Firebase Admin SDK 初始化失败:', e.message);
+  }
+}
+
+const upload = multer({
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('不支持的文件类型'));
+    }
+  }
+});
+
+async function uploadToFirebaseStorage(file, folder = 'files') {
+  if (!admin.storage) {
+    throw new Error('Firebase Admin SDK 未初始化');
+  }
+  
+  const bucket = admin.storage().bucket();
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
+  const fileRef = bucket.file(fileName);
+  
+  await fileRef.save(file.buffer, {
+    contentType: file.mimetype,
+    metadata: {
+      cacheControl: 'public, max-age=31536000'
+    }
+  });
+  
+  await fileRef.makePublic();
+  
+  const [url] = await fileRef.getSignedUrl({
+    action: 'read',
+    expires: '03-01-2500'
+  });
+  
+  return url;
+}
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: '请选择文件' });
+    }
+    
+    const url = await uploadToFirebaseStorage(req.file, req.body.folder || 'files');
+    
+    res.json({ ok: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
+  } catch (err) {
+    console.error('文件上传失败:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 const DEEPSEEK_MODELS = [
   { id: 'deepseek-chat', name: 'DeepSeek-V3', desc: '通用聊天模型，平衡性能与速度' },

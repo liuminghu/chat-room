@@ -467,6 +467,170 @@ function playRockPaperScissors() {
   document.getElementById('plusPanel').classList.add('hidden');
 }
 
+let mediaRecorder = null;
+let audioChunks = [];
+let voiceRecordingTimer = null;
+let voiceRecordingSeconds = 0;
+
+async function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  showToast('正在上传图片...', 'info');
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', 'images');
+  
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await res.json();
+    if (data.ok) {
+      socket.emit('message', { 
+        type: 'image',
+        text: '',
+        imageUrl: data.url 
+      });
+      showToast('图片发送成功！', 'success');
+    } else {
+      showToast('图片上传失败：' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('图片上传失败：' + err.message, 'error');
+  }
+  
+  e.target.value = '';
+  document.getElementById('plusPanel').classList.add('hidden');
+}
+
+async function startVoiceRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    voiceRecordingSeconds = 0;
+    
+    mediaRecorder.ondataavailable = (event) => {
+      audioChunks.push(event.data);
+    };
+    
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(track => track.stop());
+    };
+    
+    mediaRecorder.start(100);
+    
+    document.getElementById('plusPanel').classList.add('hidden');
+    document.getElementById('voiceRecorder').classList.remove('hidden');
+    
+    voiceRecordingTimer = setInterval(() => {
+      voiceRecordingSeconds++;
+      const mins = Math.floor(voiceRecordingSeconds / 60).toString().padStart(2, '0');
+      const secs = (voiceRecordingSeconds % 60).toString().padStart(2, '0');
+      document.getElementById('voice-timer').textContent = `${mins}:${secs}`;
+    }, 1000);
+    
+  } catch (err) {
+    showToast('无法访问麦克风：' + err.message, 'error');
+  }
+}
+
+function cancelVoiceRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  if (voiceRecordingTimer) {
+    clearInterval(voiceRecordingTimer);
+  }
+  document.getElementById('voiceRecorder').classList.add('hidden');
+}
+
+async function sendVoiceMessage() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  if (voiceRecordingTimer) {
+    clearInterval(voiceRecordingTimer);
+  }
+  
+  if (audioChunks.length === 0) {
+    showToast('请先录制语音', 'error');
+    return;
+  }
+  
+  showToast('正在上传语音...', 'info');
+  
+  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+  const formData = new FormData();
+  formData.append('file', audioBlob, `voice-${Date.now()}.webm`);
+  formData.append('folder', 'voice');
+  
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await res.json();
+    if (data.ok) {
+      socket.emit('message', { 
+        type: 'audio',
+        text: '',
+        audioUrl: data.url,
+        duration: voiceRecordingSeconds
+      });
+      showToast('语音发送成功！', 'success');
+    } else {
+      showToast('语音上传失败：' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('语音上传失败：' + err.message, 'error');
+  }
+  
+  document.getElementById('voiceRecorder').classList.add('hidden');
+}
+
+function previewImage(url) {
+  const overlay = document.createElement('div');
+  overlay.className = 'image-preview-overlay';
+  overlay.innerHTML = `<img src="${url}" alt="预览">`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+}
+
+let currentAudio = null;
+
+function toggleAudio(button, url) {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+    document.querySelectorAll('.message-audio-play').forEach(btn => btn.textContent = '▶');
+  }
+  
+  const audio = new Audio(url);
+  currentAudio = audio;
+  
+  audio.onplay = () => {
+    button.textContent = '⏸';
+  };
+  
+  audio.onpause = () => {
+    button.textContent = '▶';
+  };
+  
+  audio.onended = () => {
+    button.textContent = '▶';
+    currentAudio = null;
+  };
+  
+  audio.play();
+}
+
 function createHeartAnimation(x, y) {
   const heart = document.createElement('div');
   heart.className = 'like-heart';
@@ -627,6 +791,20 @@ function displayMessage(message, prepend = false) {
   let contentHtml;
   if (message.type === 'typing') {
     contentHtml = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  } else if (message.type === 'image' && message.imageUrl) {
+    contentHtml = `<img src="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片">`;
+  } else if (message.type === 'audio' && message.audioUrl) {
+    const mins = Math.floor(message.duration / 60).toString().padStart(2, '0');
+    const secs = (message.duration % 60).toString().padStart(2, '0');
+    contentHtml = `
+      <div class="message-audio">
+        <button class="message-audio-play" onclick="toggleAudio(this, '${escapeHtml(message.audioUrl)}')">▶</button>
+        <div class="message-audio-progress">
+          <div class="message-audio-progress-bar"></div>
+        </div>
+        <span class="message-audio-duration">${mins}:${secs}</span>
+      </div>
+    `;
   } else {
     contentHtml = formatMessageWithMentions(message.text);
   }
@@ -1235,6 +1413,13 @@ window.addEventListener('resize', () => {
 
 document.getElementById('rollDiceBtn').addEventListener('click', rollDice);
 document.getElementById('rockPaperScissorsBtn').addEventListener('click', playRockPaperScissors);
+document.getElementById('uploadImageBtn').addEventListener('click', () => {
+  document.getElementById('imageInput').click();
+});
+document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+document.getElementById('recordVoiceBtn').addEventListener('click', startVoiceRecording);
+document.getElementById('cancelVoiceBtn').addEventListener('click', cancelVoiceRecording);
+document.getElementById('sendVoiceBtn').addEventListener('click', sendVoiceMessage);
 
 document.getElementById('plusBtn').addEventListener('click', togglePlusPanel);
 document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
