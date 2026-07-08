@@ -439,7 +439,7 @@ function initPlusPanel() {
 function rollDice() {
   const dice = Math.floor(Math.random() * 6) + 1;
   const diceEmoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][dice - 1];
-  socket.emit('sendMessage', { text: `🎲 掷骰子结果：${diceEmoji} ${dice}点` });
+  socket.emit('message', { text: `🎲 掷骰子结果：${diceEmoji} ${dice}点` });
   document.getElementById('plusPanel').classList.add('hidden');
 }
 
@@ -461,7 +461,7 @@ function playRockPaperScissors() {
     result = '你输了！😢';
   }
   
-  socket.emit('sendMessage', { 
+  socket.emit('message', { 
     text: `✊ 石头剪刀布：你出${myChoice}，小助手出${botChoice}，${result}` 
   });
   document.getElementById('plusPanel').classList.add('hidden');
