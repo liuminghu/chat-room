@@ -548,32 +548,147 @@ function initPlusPanel() {
 function rollDice() {
   const dice = Math.floor(Math.random() * 6) + 1;
   const diceEmoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][dice - 1];
-  socket.emit('message', { text: `🎲 掷骰子结果：${diceEmoji} ${dice}点` });
+  showDiceAnimation(dice, diceEmoji);
   document.getElementById('plusPanel').classList.add('hidden');
+}
+
+function showDiceAnimation(result, resultEmoji) {
+  const overlay = document.createElement('div');
+  overlay.className = 'game-animation-overlay';
+  overlay.innerHTML = `
+    <div class="dice-animation">
+      <div class="dice-rolling" id="diceRolling">🎲</div>
+      <div class="dice-result hidden" id="diceResult">
+        <div class="dice-big">${resultEmoji}</div>
+        <div class="dice-text">${result}点！</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const diceRolling = overlay.querySelector('#diceRolling');
+  const diceResult = overlay.querySelector('#diceResult');
+  
+  const diceEmojis = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+  let rollCount = 0;
+  const rollInterval = setInterval(() => {
+    diceRolling.textContent = diceEmojis[Math.floor(Math.random() * 6)];
+    rollCount++;
+    if (rollCount >= 15) {
+      clearInterval(rollInterval);
+      diceRolling.classList.add('hidden');
+      diceResult.classList.remove('hidden');
+      diceResult.classList.add('bounce-in');
+      
+      setTimeout(() => {
+        socket.emit('message', { text: `🎲 掷骰子结果：${resultEmoji} ${result}点` });
+      }, 500);
+      
+      setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 300);
+      }, 1500);
+    }
+  }, 80);
+
+  overlay.onclick = () => {
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 300);
+  };
 }
 
 function playRockPaperScissors() {
   const choices = ['✊', '✋', '✌️'];
+  const choiceNames = { '✊': '石头', '✋': '布', '✌️': '剪刀' };
   const myChoice = choices[Math.floor(Math.random() * choices.length)];
   const botChoice = choices[Math.floor(Math.random() * choices.length)];
   
   let result = '';
+  let resultEmoji = '';
   if (myChoice === botChoice) {
     result = '平局！';
+    resultEmoji = '🤝';
   } else if (
     (myChoice === '✊' && botChoice === '✌️') ||
     (myChoice === '✋' && botChoice === '✊') ||
     (myChoice === '✌️' && botChoice === '✋')
   ) {
-    result = '你赢了！🎉';
+    result = '你赢了！';
+    resultEmoji = '🎉';
   } else {
-    result = '你输了！😢';
+    result = '你输了！';
+    resultEmoji = '😢';
   }
   
-  socket.emit('message', { 
-    text: `✊ 石头剪刀布：你出${myChoice}，小助手出${botChoice}，${result}` 
-  });
+  showRockPaperScissorsAnimation(myChoice, botChoice, result, resultEmoji, choiceNames);
   document.getElementById('plusPanel').classList.add('hidden');
+}
+
+function showRockPaperScissorsAnimation(myChoice, botChoice, result, resultEmoji, choiceNames) {
+  const overlay = document.createElement('div');
+  overlay.className = 'game-animation-overlay';
+  overlay.innerHTML = `
+    <div class="rps-animation">
+      <div class="rps-players">
+        <div class="rps-player">
+          <div class="rps-label">你</div>
+          <div class="rps-hand" id="rpsMyHand">✊</div>
+        </div>
+        <div class="rps-vs">VS</div>
+        <div class="rps-player">
+          <div class="rps-label">小助手</div>
+          <div class="rps-hand" id="rpsBotHand">✊</div>
+        </div>
+      </div>
+      <div class="rps-result hidden" id="rpsResult">
+        <div class="rps-result-emoji">${resultEmoji}</div>
+        <div class="rps-result-text">${result}</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const myHand = overlay.querySelector('#rpsMyHand');
+  const botHand = overlay.querySelector('#rpsBotHand');
+  const rpsResult = overlay.querySelector('#rpsResult');
+  
+  const shakeEmojis = ['✊', '✋', '✌️'];
+  let shakeCount = 0;
+  const shakeInterval = setInterval(() => {
+    myHand.textContent = shakeEmojis[Math.floor(Math.random() * 3)];
+    botHand.textContent = shakeEmojis[Math.floor(Math.random() * 3)];
+    myHand.classList.toggle('shake');
+    botHand.classList.toggle('shake');
+    shakeCount++;
+    if (shakeCount >= 10) {
+      clearInterval(shakeInterval);
+      myHand.classList.remove('shake');
+      botHand.classList.remove('shake');
+      myHand.textContent = myChoice;
+      botHand.textContent = botChoice;
+      
+      setTimeout(() => {
+        rpsResult.classList.remove('hidden');
+        rpsResult.classList.add('bounce-in');
+        
+        setTimeout(() => {
+          socket.emit('message', { 
+            text: `✊ 石头剪刀布：你出${myChoice}(${choiceNames[myChoice]})，小助手出${botChoice}(${choiceNames[botChoice]})，${result}${resultEmoji}` 
+          });
+        }, 500);
+        
+        setTimeout(() => {
+          overlay.style.opacity = '0';
+          setTimeout(() => overlay.remove(), 300);
+        }, 2000);
+      }, 500);
+    }
+  }, 120);
+
+  overlay.onclick = () => {
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 300);
+  };
 }
 
 let mediaRecorder = null;

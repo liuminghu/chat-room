@@ -1959,3 +1959,127 @@ body {
   max-height: 90vh;
   object-fit: contain;
 }
+
+.game-animation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.dice-animation {
+  text-align: center;
+}
+
+.dice-rolling {
+  font-size: 100px;
+  animation: diceSpin 0.1s linear infinite;
+}
+
+@keyframes diceSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.1); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.dice-result {
+  text-align: center;
+}
+
+.dice-big {
+  font-size: 120px;
+  margin-bottom: 10px;
+}
+
+.dice-text {
+  font-size: 32px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.rps-animation {
+  text-align: center;
+}
+
+.rps-players {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.rps-player {
+  text-align: center;
+}
+
+.rps-label {
+  font-size: 14px;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 10px;
+}
+
+.rps-hand {
+  font-size: 80px;
+  transition: transform 0.1s;
+}
+
+.rps-hand.shake {
+  animation: rpsShake 0.12s ease-in-out;
+}
+
+@keyframes rpsShake {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+
+.rps-vs {
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.rps-result {
+  text-align: center;
+}
+
+.rps-result-emoji {
+  font-size: 60px;
+  margin-bottom: 10px;
+}
+
+.rps-result-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
