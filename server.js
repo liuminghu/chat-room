@@ -1,10 +1,13 @@
+const fs = require('fs');
+const path = require('path');
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { tavily } = require('@tavily/core');
-const admin = require('firebase-admin');
-const multer = require('multer');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,7 +24,7 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public', { extensions: ['html'] }));
 
 const PORT = process.env.PORT || 3000;
@@ -29,27 +32,55 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://chat-room-demo-e837c-default-rtdb.firebaseio.com';
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
-const FIREBASE_STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'chat-room-demo-e837c.appspot.com';
-const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || '';
 const BOT_NAME = '小助手';
 const DEFAULT_ROOM = 'public';
 const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
-if (FIREBASE_SERVICE_ACCOUNT) {
-  try {
-    const serviceAccount = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: FIREBASE_STORAGE_BUCKET
-    });
-    console.log('Firebase Admin SDK 初始化成功');
-  } catch (e) {
-    console.error('Firebase Admin SDK 初始化失败:', e.message);
-  }
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
+
+let s3Client = null;
+if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME) {
+  s3Client = new S3Client({
+    region: 'auto',
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY
+    }
+  });
+  console.log('Cloudflare R2 客户端初始化成功');
 }
 
+async function uploadToR2(file, folder = 'files') {
+  if (!s3Client) {
+    throw new Error('Cloudflare R2 客户端未初始化');
+  }
+  
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
+  
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: R2_BUCKET_NAME,
+      Key: fileName,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      CacheControl: 'public, max-age=31536000'
+    }
+  });
+  
+  await upload.done();
+  
+  return `${R2_PUBLIC_URL}/${fileName}`;
+}
+
+const multer = require('multer');
 const upload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024
@@ -64,39 +95,13 @@ const upload = multer({
   }
 });
 
-async function uploadToFirebaseStorage(file, folder = 'files') {
-  if (!admin.storage) {
-    throw new Error('Firebase Admin SDK 未初始化');
-  }
-  
-  const bucket = admin.storage().bucket();
-  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.originalname}`;
-  const fileRef = bucket.file(fileName);
-  
-  await fileRef.save(file.buffer, {
-    contentType: file.mimetype,
-    metadata: {
-      cacheControl: 'public, max-age=31536000'
-    }
-  });
-  
-  await fileRef.makePublic();
-  
-  const [url] = await fileRef.getSignedUrl({
-    action: 'read',
-    expires: '03-01-2500'
-  });
-  
-  return url;
-}
-
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ ok: false, error: '请选择文件' });
     }
     
-    const url = await uploadToFirebaseStorage(req.file, req.body.folder || 'files');
+    const url = await uploadToR2(req.file, req.body.folder || 'files');
     
     res.json({ ok: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
   } catch (err) {
