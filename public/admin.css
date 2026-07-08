@@ -5,9 +5,9 @@
 }
 
 :root {
-  --primary: #6366f1;
-  --primary-light: #818cf8;
-  --primary-dark: #4f46e5;
+  --primary: #FF6B6B;
+  --primary-light: #FF8E53;
+  --primary-dark: #EE5A5A;
   --bg-main: #f1f5f9;
   --bg-card: #ffffff;
   --bg-sidebar: #1e293b;
@@ -92,7 +92,7 @@ body {
 .nav-item.active {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
 }
 
 .nav-icon {
@@ -367,7 +367,7 @@ body {
 
 .service-card:hover {
   border-color: var(--primary-light);
-  background: rgba(99, 102, 241, 0.03);
+  background: rgba(255, 107, 107, 0.03);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
@@ -431,7 +431,7 @@ body {
 
 .usage-card:hover {
   border-color: var(--primary-light);
-  background: rgba(99, 102, 241, 0.02);
+  background: rgba(255, 107, 107, 0.02);
   transform: translateY(-1px);
 }
 
@@ -503,13 +503,13 @@ body {
 
 .model-option:hover {
   border-color: var(--primary-light);
-  background: rgba(99, 102, 241, 0.02);
+  background: rgba(255, 107, 107, 0.02);
   transform: translateY(-1px);
 }
 
 .model-option.selected {
   border-color: var(--primary);
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(255, 107, 107, 0.05);
 }
 
 .model-radio {
@@ -647,7 +647,7 @@ body {
 
 .room-item:hover {
   border-color: var(--primary-light);
-  background: rgba(99, 102, 241, 0.02);
+  background: rgba(255, 107, 107, 0.02);
 }
 
 .room-info {
