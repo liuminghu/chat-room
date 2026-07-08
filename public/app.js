@@ -150,7 +150,10 @@ function connectSocket() {
 
 function renderMembersList(users) {
   const membersList = document.getElementById('membersList');
+  const memberCount = document.getElementById('memberCount');
   const allMembers = [BOT_NAME, ...users].filter((u, i, arr) => arr.indexOf(u) === i);
+  
+  memberCount.textContent = allMembers.length;
   
   membersList.innerHTML = allMembers.map(member => {
     const isBot = member === BOT_NAME;
@@ -178,12 +181,38 @@ function renderMembersList(users) {
       }
       input.value += '@' + memberName + ' ';
       input.focus();
+      
+      // 移动端：点击后关闭侧边栏
+      if (window.innerWidth <= 600) {
+        closeMembersSidebar();
+      }
     });
   });
 }
 
+function toggleMembersSidebar() {
+  const sidebar = document.getElementById('membersSidebar');
+  const overlay = document.getElementById('membersSidebarOverlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+
+function closeMembersSidebar() {
+  const sidebar = document.getElementById('membersSidebar');
+  const overlay = document.getElementById('membersSidebarOverlay');
+  sidebar.classList.remove('open');
+  overlay.classList.remove('open');
+}
+
 function updateUserStatus(status) {
-  document.getElementById('userStatus').textContent = status;
+  const statusEl = document.getElementById('userStatus');
+  statusEl.textContent = status;
+  statusEl.classList.remove('connected', 'reconnecting');
+  if (status === '已连接') {
+    statusEl.classList.add('connected');
+  } else if (status.includes('重连中')) {
+    statusEl.classList.add('reconnecting');
+  }
 }
 
 function sendMessage() {
@@ -615,10 +644,15 @@ function showChatScreen(name, roomId) {
   document.getElementById('chatScreen').classList.remove('hidden');
 
   const roomBadge = document.getElementById('roomBadge');
-  roomBadge.textContent = `#${roomId}`;
+  roomBadge.textContent = roomId;
   roomBadge.classList.remove('hidden');
 
   document.getElementById('shareBtn').classList.remove('hidden');
+  
+  // 移动端显示成员按钮
+  if (window.innerWidth <= 600) {
+    document.getElementById('membersToggle').classList.remove('hidden');
+  }
 }
 
 function joinChat(name, roomId) {
@@ -700,7 +734,7 @@ function copyShareLink() {
   const url = getShareUrl();
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(() => {
-      showToast('链接已复制到剪贴板');
+      showToast('链接已复制', 'success');
     }).catch(() => {
       fallbackCopy(url);
     });
@@ -718,9 +752,9 @@ function fallbackCopy(text) {
   textarea.select();
   try {
     document.execCommand('copy');
-    showToast('链接已复制到剪贴板');
+    showToast('链接已复制', 'success');
   } catch (e) {
-    showToast('复制失败，请手动复制');
+    showToast('复制失败', 'error');
   }
   document.body.removeChild(textarea);
 }
@@ -748,7 +782,7 @@ async function saveShareImage() {
   }
 }
 
-function showToast(msg) {
+function showToast(msg, type = '') {
   let toast = document.getElementById('toast');
   if (!toast) {
     toast = document.createElement('div');
@@ -757,6 +791,8 @@ function showToast(msg) {
     document.body.appendChild(toast);
   }
   toast.textContent = msg;
+  toast.classList.remove('success', 'error');
+  if (type) toast.classList.add(type);
   toast.classList.add('show');
   setTimeout(() => {
     toast.classList.remove('show');
@@ -768,6 +804,21 @@ document.getElementById('shareCloseBtn').addEventListener('click', closeShareMod
 document.querySelector('.share-modal-overlay').addEventListener('click', closeShareModal);
 document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
 document.getElementById('saveImageBtn').addEventListener('click', saveShareImage);
+
+// 移动端侧边栏
+document.getElementById('membersToggle').addEventListener('click', toggleMembersSidebar);
+document.getElementById('membersSidebarOverlay').addEventListener('click', closeMembersSidebar);
+
+// 窗口大小变化时处理
+window.addEventListener('resize', () => {
+  const membersToggle = document.getElementById('membersToggle');
+  if (window.innerWidth <= 600) {
+    membersToggle.classList.remove('hidden');
+  } else {
+    membersToggle.classList.add('hidden');
+    closeMembersSidebar();
+  }
+});
 
 document.getElementById('emojiBtn').addEventListener('click', toggleEmojiPanel);
 document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
