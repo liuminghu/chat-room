@@ -828,19 +828,17 @@ function displayMessage(message, prepend = false) {
   if (message.type === 'typing') {
     contentHtml = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   } else if (message.type === 'image' && message.imageUrl) {
-    const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(message.imageUrl)}`;
     contentHtml = `
       <div class="message-image-wrapper">
         <div class="message-image-loading">⏳ 图片加载中...</div>
-        <img src="${escapeHtml(proxyUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.textContent='❌ 图片加载失败'">
+        <img src="${escapeHtml(message.imageUrl)}" class="message-image" onclick="previewImage('${escapeHtml(message.imageUrl)}')" alt="图片" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.textContent='❌ 图片加载失败'">
       </div>`;
   } else if (message.type === 'audio' && message.audioUrl) {
-    const proxyAudioUrl = `/api/image-proxy?url=${encodeURIComponent(message.audioUrl)}`;
     const mins = Math.floor(message.duration / 60).toString().padStart(2, '0');
     const secs = (message.duration % 60).toString().padStart(2, '0');
     contentHtml = `
       <div class="message-audio">
-        <button class="message-audio-play" onclick="toggleAudio(this, '${escapeHtml(proxyAudioUrl)}')">▶</button>
+        <button class="message-audio-play" onclick="toggleAudio(this, '${escapeHtml(message.audioUrl)}')">▶</button>
         <div class="message-audio-progress">
           <div class="message-audio-progress-bar"></div>
         </div>
