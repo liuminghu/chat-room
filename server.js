@@ -465,13 +465,16 @@ io.on('connection', (socket) => {
     const userId = socket.userId;
     const msg = {
       id: Date.now() + Math.random(),
-      type: 'message',
+      type: data.type || 'message',
       username: username,
       userId: userId,
       text: data.text,
       timestamp: Date.now(),
       likes: [],
-      replyTo: data.replyTo || null
+      replyTo: data.replyTo || null,
+      imageUrl: data.imageUrl,
+      audioUrl: data.audioUrl,
+      duration: data.duration
     };
 
     room.messages.push(msg);
