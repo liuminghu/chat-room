@@ -380,11 +380,8 @@ function initPlusPanel() {
       return;
     }
 
-    const cmd = `/投票 ${question} ${options.join(' ')}`;
-    const input = document.getElementById('messageInput');
-    input.value = cmd;
+    socket.emit('createPoll', { question, options });
     document.getElementById('plusPanel').classList.add('hidden');
-    sendMessage();
 
     // 重置表单
     document.getElementById('pollQuestion').value = '';

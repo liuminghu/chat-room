@@ -492,6 +492,43 @@ io.on('connection', (socket) => {
     saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
   });
 
+  socket.on('createPoll', ({ question, options }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (!question || !options || options.length < 2) return;
+
+    if (!room.poll) room.poll = {};
+    const pollId = Date.now().toString();
+    const fromUser = socket.username || '匿名';
+    room.poll.active = {
+      id: pollId,
+      question,
+      options,
+      votes: {},
+      creator: fromUser
+    };
+    const pollMsg = {
+      id: pollId,
+      type: 'poll',
+      username: BOT_NAME,
+      pollData: {
+        id: pollId,
+        question,
+        options,
+        votes: {},
+        creator: fromUser
+      },
+      timestamp: Date.now()
+    };
+    room.messages.push(pollMsg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    saveMessageToFirebase(roomId, pollMsg);
+    io.to(roomId).emit('message', pollMsg);
+    saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
+  });
+
   // 客户端请求加载更早的历史消息
   socket.on('loadMoreHistory', async ({ beforeTimestamp }) => {
     const roomId = socket.roomId;
@@ -589,8 +626,9 @@ io.on('connection', (socket) => {
 });
 
 function shouldTriggerBot(text, username) {
-  if (!DEEPSEEK_API_KEY) return false;
   if (username === BOT_NAME) return false;
+  if (text.startsWith('/')) return true;
+  if (!DEEPSEEK_API_KEY) return false;
   return text.includes('@' + BOT_NAME) || text.startsWith('小助手');
 }
 
