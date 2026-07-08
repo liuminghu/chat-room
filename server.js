@@ -51,15 +51,28 @@ async function uploadFileToCloudinary(file, folder = 'chat-room') {
         resource_type: file.mimetype.startsWith('image') ? 'image' : 'video',
         folder: folder,
         public_id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        overwrite: false
+        overwrite: false,
+        quality: 'auto:good',
+        fetch_format: 'auto',
+        width: 1600,
+        height: 1600,
+        crop: 'limit'
       },
       (error, result) => {
         if (error) {
           console.error(`❌ Cloudinary上传失败 | 文件: ${file.originalname} | 大小: ${(file.size / 1024).toFixed(2)}KB | 错误: ${error.message}`);
           reject(error);
         } else {
-          console.log(`✅ Cloudinary上传成功 | 文件: ${file.originalname} | 大小: ${(file.size / 1024).toFixed(2)}KB | URL: ${result.secure_url} | 宽度: ${result.width || '-'} | 高度: ${result.height || '-'}`);
-          resolve(result.secure_url);
+          const optimizedUrl = cloudinary.url(result.public_id, {
+            resource_type: result.resource_type,
+            quality: 'auto:good',
+            fetch_format: 'auto',
+            width: 800,
+            crop: 'limit',
+            secure: true
+          });
+          console.log(`✅ Cloudinary上传成功 | 文件: ${file.originalname} | 原始大小: ${(file.size / 1024).toFixed(2)}KB | URL: ${optimizedUrl}`);
+          resolve(optimizedUrl);
         }
       }
     );
