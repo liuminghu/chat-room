@@ -184,7 +184,7 @@ io.on('connection', (socket) => {
 
     // 机器人欢迎（只欢迎第一次进入房间的用户）
     const isNewUser = !room.messages.some(
-      m => m.username === finalUsername || (m.type === 'system' && m.text.startsWith(`${finalUsername} `))
+      m => m.userId === finalUserId
     );
 
     if (isNewUser) {
@@ -214,10 +214,12 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const username = room.users.get(socket.id) || '匿名';
+    const userId = socket.userId;
     const msg = {
       id: Date.now() + Math.random(),
       type: 'message',
       username: username,
+      userId: userId,
       text: data.text,
       timestamp: Date.now(),
       likes: [],
@@ -243,13 +245,13 @@ io.on('connection', (socket) => {
     const msg = room.messages.find(m => m.id == messageId);
     if (!msg || msg.type !== 'message') return;
 
-    const user = room.users.get(socket.id);
+    const userId = socket.userId;
     if (!msg.likes) msg.likes = [];
-    const idx = msg.likes.indexOf(user);
+    const idx = msg.likes.indexOf(userId);
     if (idx > -1) {
       msg.likes.splice(idx, 1);
     } else {
-      msg.likes.push(user);
+      msg.likes.push(userId);
     }
     io.to(roomId).emit('messageLiked', { messageId: msg.id, likes: msg.likes });
   });
@@ -262,7 +264,7 @@ io.on('connection', (socket) => {
 
     const msg = room.messages.find(m => m.id == messageId);
     if (!msg || msg.type !== 'message') return;
-    if (msg.username !== room.users.get(socket.id)) return;
+    if (msg.userId !== socket.userId) return;
     if (Date.now() - msg.timestamp > 120000) return;
 
     msg.recalled = true;

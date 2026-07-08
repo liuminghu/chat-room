@@ -144,7 +144,7 @@ function connectSocket() {
       const likeBtn = msgEl.querySelector('.like-action');
       if (likeCount) likeCount.textContent = likes.length;
       if (likeBtn) {
-        const isLiked = likes.includes(username);
+        const isLiked = likes.includes(userId);
         likeBtn.classList.toggle('liked', isLiked);
       }
     }
@@ -389,8 +389,8 @@ function displayMessage(message, prepend = false) {
   }
 
   const likes = message.likes || [];
-  const isLiked = likes.includes(username);
-  const canRecall = isSent && (Date.now() - message.timestamp < 120000);
+  const isLiked = likes.includes(userId);
+  const canRecall = message.userId === userId && (Date.now() - message.timestamp < 120000);
 
   messageDiv.innerHTML = `
     <div class="message-avatar">${avatar}</div>
