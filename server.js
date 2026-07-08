@@ -97,6 +97,12 @@ io.on('connection', (socket) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
     const finalUsername = (username && username.trim()) || '匿名';
 
+    // 如果是重连（同一用户重新 join），取消 disconnect 时的延迟离开广播
+    if (socket.leaveTimer) {
+      clearTimeout(socket.leaveTimer);
+      socket.leaveTimer = null;
+    }
+
     // 离开之前加入的房间
     const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
     previousRooms.forEach(r => {
@@ -106,7 +112,8 @@ io.on('connection', (socket) => {
         prevRoom.users.delete(socket.id);
         const prevUserList = Array.from(new Set(prevRoom.users.values()));
         io.to(r).emit('userList', prevUserList);
-        if (prevName) {
+        // 同房间重连（用户名相同）不广播离开消息
+        if (prevName && (r !== finalRoomId || prevName !== finalUsername)) {
           const leaveMsg = {
             id: Date.now() + Math.random(),
             type: 'system',
@@ -123,6 +130,11 @@ io.on('connection', (socket) => {
     });
 
     const room = await getOrLoadRoom(finalRoomId);
+
+    // 判断是否首次加入该房间（同房间内已有同名用户视为重连，不广播加入）
+    const existingUserList = Array.from(new Set(room.users.values()));
+    const isReconnect = existingUserList.includes(finalUsername);
+
     room.users.set(socket.id, finalUsername);
     socket.join(finalRoomId);
     socket.roomId = finalRoomId;
@@ -134,16 +146,19 @@ io.on('connection', (socket) => {
     // 发送历史消息给新加入的用户
     socket.emit('history', room.messages.slice(-20));
 
-    const systemMsg = {
-      id: Date.now() + Math.random(),
-      type: 'system',
-      text: `${finalUsername} 加入了聊天室`,
-      timestamp: Date.now()
-    };
-    room.messages.push(systemMsg);
-    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
-    saveMessageToFirebase(finalRoomId, systemMsg);
-    io.to(finalRoomId).emit('message', systemMsg);
+    // 重连时不广播"加入"消息
+    if (!isReconnect) {
+      const systemMsg = {
+        id: Date.now() + Math.random(),
+        type: 'system',
+        text: `${finalUsername} 加入了聊天室`,
+        timestamp: Date.now()
+      };
+      room.messages.push(systemMsg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      saveMessageToFirebase(finalRoomId, systemMsg);
+      io.to(finalRoomId).emit('message', systemMsg);
+    }
 
     // 发送房间公告给新用户
     if (room.announcement) {
@@ -246,23 +261,30 @@ io.on('connection', (socket) => {
     const roomId = socket.roomId;
     const username = socket.username;
     if (roomId && username) {
-      const room = rooms.get(roomId);
-      if (room) {
-        room.users.delete(socket.id);
-        const userList = Array.from(new Set(room.users.values()));
-        io.to(roomId).emit('userList', userList);
+      // 延迟广播"离开"消息，期间重连则取消
+      socket.leaveTimer = setTimeout(() => {
+        const room = rooms.get(roomId);
+        if (!room) return;
+        // 再次确认用户是否真的离线（防止重连后又被广播）
+        // 如果房间内还有同名用户（重连后加入了新 socket），不广播
+        const currentUsers = Array.from(new Set(room.users.values()));
+        if (!currentUsers.includes(username)) {
+          room.users.delete(socket.id);
+          const userList = Array.from(new Set(room.users.values()));
+          io.to(roomId).emit('userList', userList);
 
-        const systemMsg = {
-          id: Date.now() + Math.random(),
-          type: 'system',
-          text: `${username} 离开了聊天室`,
-          timestamp: Date.now()
-        };
-        room.messages.push(systemMsg);
-        if (room.messages.length > 500) room.messages = room.messages.slice(-500);
-        saveMessageToFirebase(roomId, systemMsg);
-        io.to(roomId).emit('message', systemMsg);
-      }
+          const systemMsg = {
+            id: Date.now() + Math.random(),
+            type: 'system',
+            text: `${username} 离开了聊天室`,
+            timestamp: Date.now()
+          };
+          room.messages.push(systemMsg);
+          if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+          saveMessageToFirebase(roomId, systemMsg);
+          io.to(roomId).emit('message', systemMsg);
+        }
+      }, 8000);
     }
     console.log('用户断开:', socket.id);
   });
