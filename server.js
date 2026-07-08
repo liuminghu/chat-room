@@ -31,7 +31,43 @@ const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
+const DEEPSEEK_MODELS = [
+  { id: 'deepseek-chat', name: 'DeepSeek-V3', desc: '通用聊天模型，平衡性能与速度' },
+  { id: 'deepseek-reasoner', name: 'DeepSeek-R1', desc: '推理模型，擅长复杂数学和逻辑推理' }
+];
+
+let appConfig = {
+  deepseekModel: 'deepseek-chat'
+};
+
 const botRateLimitMap = new Map();
+
+async function loadAppConfig() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/config/app.json`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
+        appConfig = { ...appConfig, ...data };
+        console.log('应用配置已加载:', appConfig);
+      }
+    }
+  } catch (err) {
+    console.error('Firebase 加载应用配置失败:', err);
+  }
+}
+
+async function saveAppConfig() {
+  try {
+    await fetch(`${FIREBASE_DB_URL}/config/app.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appConfig)
+    });
+  } catch (err) {
+    console.error('Firebase 保存应用配置失败:', err);
+  }
+}
 
 function getTodayStr() {
   return new Date().toISOString().split('T')[0];
@@ -943,7 +979,7 @@ async function callDeepSeekAPI(messages, searchResults = null, fromUser = '', is
       'Authorization': 'Bearer ' + DEEPSEEK_API_KEY
     },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: appConfig.deepseekModel,
       messages: requestMessages,
       temperature: 0.7,
       max_tokens: 800
@@ -1082,22 +1118,120 @@ async function fetchBotUsageStats() {
   }
 }
 
+app.get('/api/config', (req, res) => {
+  res.json({
+    deepseekModel: appConfig.deepseekModel,
+    availableModels: DEEPSEEK_MODELS
+  });
+});
+
+app.put('/api/config', async (req, res) => {
+  const { deepseekModel } = req.body;
+  
+  if (deepseekModel) {
+    const validModel = DEEPSEEK_MODELS.find(m => m.id === deepseekModel);
+    if (!validModel) {
+      return res.status(400).json({ error: '无效的模型 ID' });
+    }
+    appConfig.deepseekModel = deepseekModel;
+    await saveAppConfig();
+  }
+  
+  res.json({
+    success: true,
+    deepseekModel: appConfig.deepseekModel
+  });
+});
+
+async function fetchFirebaseStats() {
+  try {
+    const [botUsageRes, roomsRes, configRes] = await Promise.all([
+      fetch(`${FIREBASE_DB_URL}/botUsage.json`),
+      fetch(`${FIREBASE_DB_URL}/rooms.json`),
+      fetch(`${FIREBASE_DB_URL}/config/app.json`)
+    ]);
+
+    const botUsage = botUsageRes.ok ? await botUsageRes.json() : null;
+    const rooms = roomsRes.ok ? await roomsRes.json() : null;
+    const config = configRes.ok ? await configRes.json() : null;
+
+    let totalBotUsers = 0;
+    let todayBotCalls = 0;
+    let totalBotCalls = 0;
+    const today = new Date().toISOString().split('T')[0];
+
+    if (botUsage && typeof botUsage === 'object') {
+      totalBotUsers = Object.keys(botUsage).length;
+      Object.values(botUsage).forEach(userData => {
+        if (userData && typeof userData === 'object') {
+          todayBotCalls += userData[today] || 0;
+          totalBotCalls += Object.values(userData).reduce((sum, val) => sum + (Number(val) || 0), 0);
+        }
+      });
+    }
+
+    let totalRooms = 0;
+    let totalMessages = 0;
+    let roomsWithMetadata = 0;
+
+    if (rooms && typeof rooms === 'object') {
+      totalRooms = Object.keys(rooms).length;
+      Object.values(rooms).forEach(roomData => {
+        if (roomData && typeof roomData === 'object') {
+          if (roomData.messages && typeof roomData.messages === 'object') {
+            totalMessages += Object.keys(roomData.messages).length;
+          }
+          if (roomData.metadata) {
+            roomsWithMetadata++;
+          }
+        }
+      });
+    }
+
+    return {
+      ok: true,
+      configured: !!FIREBASE_DB_URL,
+      databaseUrl: FIREBASE_DB_URL,
+      botUsage: {
+        totalUsers: totalBotUsers,
+        todayCalls: todayBotCalls,
+        totalCalls: totalBotCalls
+      },
+      rooms: {
+        totalRooms,
+        totalMessages,
+        roomsWithMetadata
+      },
+      config: config || null
+    };
+  } catch (err) {
+    return {
+      configured: !!FIREBASE_DB_URL,
+      ok: false,
+      error: err.message
+    };
+  }
+}
+
 app.get('/api/usage', async (req, res) => {
-  const [deepseek, tavily, botStats] = await Promise.all([
+  const [deepseek, tavily, botStats, firebaseStats] = await Promise.all([
     fetchDeepSeekBalance(), 
     fetchTavilyUsage(),
-    fetchBotUsageStats()
+    fetchBotUsageStats(),
+    fetchFirebaseStats()
   ]);
   res.json({
     deepseek,
     tavily,
     botStats,
+    firebaseStats,
     checkedAt: new Date().toISOString()
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
+  await loadAppConfig();
 });
 
 setInterval(() => {

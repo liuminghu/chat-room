@@ -487,6 +487,146 @@ body {
   color: var(--error);
 }
 
+/* Model Settings */
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--bg-main);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.model-option:hover {
+  border-color: var(--primary-light);
+  background: rgba(99, 102, 241, 0.02);
+  transform: translateY(-1px);
+}
+
+.model-option.selected {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.model-radio {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.model-option.selected .model-radio {
+  border-color: var(--primary);
+}
+
+.model-radio-inner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.model-option.selected .model-radio-inner {
+  background: var(--primary);
+}
+
+.model-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.model-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.model-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.model-badge {
+  padding: 4px 12px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.model-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0 4px;
+}
+
+.save-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-icon {
+  font-size: 16px;
+}
+
+.save-msg {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.save-msg.saving {
+  color: var(--text-muted);
+}
+
+.save-msg.success {
+  color: var(--success);
+}
+
+.save-msg.error {
+  color: var(--error);
+}
+
 /* Room List */
 .room-list {
   padding: 16px 24px 24px;

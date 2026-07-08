@@ -8,10 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   loadDashboard();
   loadUsage();
+  loadModelConfig();
 
   document.getElementById('refreshBtn').addEventListener('click', () => {
     loadDashboard();
     loadUsage();
+    loadModelConfig();
   });
 });
 
@@ -103,6 +105,7 @@ function updateServiceStatus(data) {
 async function loadUsage() {
   const list = document.getElementById('usageList');
   const botList = document.getElementById('botStatsList');
+  const firebaseList = document.getElementById('firebaseStats');
   const checkedAt = document.getElementById('usageCheckedAt');
 
   list.innerHTML = `
@@ -119,12 +122,20 @@ async function loadUsage() {
     </div>
   `;
 
+  firebaseList.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">☁️</div>
+      <p>正在加载Firebase数据...</p>
+    </div>
+  `;
+
   try {
     const res = await fetch('/api/usage');
     const data = await res.json();
     checkedAt.textContent = data.checkedAt ? `查询时间：${new Date(data.checkedAt).toLocaleString('zh-CN')}` : '--';
     updateUsageList(data);
     updateBotStatsList(data.botStats || {});
+    updateFirebaseStats(data.firebaseStats || {});
   } catch (err) {
     checkedAt.textContent = '查询失败';
     list.innerHTML = `
@@ -164,6 +175,57 @@ function updateBotStatsList(stats) {
         <div class="usage-detail">机器人对话次数</div>
       </div>
       <div class="usage-value active">${item.value}</div>
+    </div>
+  `).join('');
+}
+
+function updateFirebaseStats(stats) {
+  const list = document.getElementById('firebaseStats');
+  
+  if (!stats.configured) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>未配置 Firebase</p>
+        <p class="empty-sub">请配置 FIREBASE_DB_URL 环境变量</p>
+      </div>
+    `;
+    return;
+  }
+  
+  if (!stats.ok) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>Firebase 连接失败</p>
+        <p class="empty-sub">${escapeHtml(stats.error)}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  const dbUrl = stats.databaseUrl || '';
+  const botUsage = stats.botUsage || {};
+  const rooms = stats.rooms || {};
+  
+  const statsItems = [
+    { name: '数据库地址', value: dbUrl.split('//')[1] || dbUrl, icon: '🔗', detail: 'Firebase Realtime Database' },
+    { name: '机器人用户数', value: botUsage.totalUsers || 0, icon: '👤', detail: '累计使用机器人的用户' },
+    { name: '今日机器人调用', value: botUsage.todayCalls || 0, icon: '📊', detail: '今天的机器人对话次数' },
+    { name: '累计机器人调用', value: botUsage.totalCalls || 0, icon: '📈', detail: '历史总对话次数' },
+    { name: '房间总数', value: rooms.totalRooms || 0, icon: '💬', detail: '存储的房间数量' },
+    { name: '消息总数', value: rooms.totalMessages || 0, icon: '✉️', detail: '历史消息记录数' },
+    { name: '带元数据的房间', value: rooms.roomsWithMetadata || 0, icon: '📋', detail: '有公告/签到等配置的房间' }
+  ];
+  
+  list.innerHTML = statsItems.map(item => `
+    <div class="usage-card">
+      <div class="usage-icon">${item.icon}</div>
+      <div class="usage-info">
+        <div class="usage-name">${item.name}</div>
+        <div class="usage-detail">${escapeHtml(item.detail)}</div>
+      </div>
+      <div class="usage-value active">${escapeHtml(item.value)}</div>
     </div>
   `).join('');
 }
@@ -226,6 +288,112 @@ function updateUsageList(data) {
       </div>
     `;
   }).join('');
+}
+
+async function loadModelConfig() {
+  const container = document.getElementById('modelSettings');
+  
+  try {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    renderModelSettings(data);
+  } catch (err) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>加载模型配置失败</p>
+        <p class="empty-sub">${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function renderModelSettings(data) {
+  const container = document.getElementById('modelSettings');
+  const currentModel = data.deepseekModel;
+  const models = data.availableModels || [];
+  
+  container.innerHTML = models.map(m => `
+    <div class="model-option ${m.id === currentModel ? 'selected' : ''}" data-model="${m.id}">
+      <div class="model-radio">
+        <div class="model-radio-inner"></div>
+      </div>
+      <div class="model-info">
+        <div class="model-name">${escapeHtml(m.name)}</div>
+        <div class="model-desc">${escapeHtml(m.desc)}</div>
+        <div class="model-id">模型ID: ${escapeHtml(m.id)}</div>
+      </div>
+      ${m.id === currentModel ? '<div class="model-badge">当前使用</div>' : ''}
+    </div>
+  `).join('') + `
+    <div class="model-actions">
+      <button id="saveModelBtn" class="save-btn" disabled>
+        <span class="save-icon">💾</span>
+        保存设置
+      </button>
+      <span id="saveModelMsg" class="save-msg"></span>
+    </div>
+  `;
+  
+  let selectedModel = currentModel;
+  
+  document.querySelectorAll('.model-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const modelId = option.dataset.model;
+      if (modelId === selectedModel) return;
+      
+      selectedModel = modelId;
+      
+      document.querySelectorAll('.model-option').forEach(o => {
+        o.classList.remove('selected');
+        const badge = o.querySelector('.model-badge');
+        if (badge) badge.remove();
+      });
+      
+      option.classList.add('selected');
+      
+      const saveBtn = document.getElementById('saveModelBtn');
+      saveBtn.disabled = selectedModel === currentModel;
+      
+      const msg = document.getElementById('saveModelMsg');
+      msg.textContent = '';
+      msg.className = 'save-msg';
+    });
+  });
+  
+  const saveBtn = document.getElementById('saveModelBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      const msg = document.getElementById('saveModelMsg');
+      msg.textContent = '保存中...';
+      msg.className = 'save-msg saving';
+      
+      try {
+        const res = await fetch('/api/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deepseekModel: selectedModel })
+        });
+        
+        const result = await res.json();
+        
+        if (result.success) {
+          msg.textContent = '✓ 保存成功';
+          msg.className = 'save-msg success';
+          setTimeout(() => {
+            loadModelConfig();
+          }, 1000);
+        } else {
+          throw new Error(result.error || '保存失败');
+        }
+      } catch (err) {
+        msg.textContent = '✗ 保存失败: ' + err.message;
+        msg.className = 'save-msg error';
+        saveBtn.disabled = false;
+      }
+    });
+  }
 }
 
 function updateRoomList(rooms) {
