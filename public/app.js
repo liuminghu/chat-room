@@ -286,21 +286,10 @@ function renderEmojiPanel() {
 function requestLoadMoreHistory() {
   if (!hasMoreHistory || loadingHistory || !socket) return;
 
-  const container = document.getElementById('messagesContainer');
-  if (!container) return;
-
-  // 找最早的一条消息的 timestamp
-  let earliestTs = null;
-  const firstMsg = container.querySelector('[data-msg-id]');
-  if (firstMsg) {
-    // 从已知集合里取最小 timestamp
-    earliestTs = window.__earliestTimestamp || null;
-  }
-
-  // 如果容器里没消息，从服务器拉取一次
-  if (earliestTs === null) {
-    // 进入聊天时已经拉过 20 条，这里仅做兜底
-    return;
+  let earliestTs = window.__earliestTimestamp;
+  
+  if (earliestTs === undefined || earliestTs === null) {
+    earliestTs = Date.now();
   }
 
   loadingHistory = true;
@@ -337,8 +326,12 @@ function displayMessage(message, prepend = false) {
       container.appendChild(messageDiv);
       container.scrollTop = container.scrollHeight;
     }
-    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
-      window.__earliestTimestamp = message.timestamp;
+    if (message.timestamp) {
+      if (window.__earliestTimestamp === undefined) {
+        window.__earliestTimestamp = message.timestamp;
+      } else if (message.timestamp < window.__earliestTimestamp) {
+        window.__earliestTimestamp = message.timestamp;
+      }
     }
     return;
   }
@@ -353,8 +346,12 @@ function displayMessage(message, prepend = false) {
       container.appendChild(messageDiv);
       container.scrollTop = container.scrollHeight;
     }
-    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
-      window.__earliestTimestamp = message.timestamp;
+    if (message.timestamp) {
+      if (window.__earliestTimestamp === undefined) {
+        window.__earliestTimestamp = message.timestamp;
+      } else if (message.timestamp < window.__earliestTimestamp) {
+        window.__earliestTimestamp = message.timestamp;
+      }
     }
     return;
   }
@@ -437,14 +434,22 @@ function displayMessage(message, prepend = false) {
 
   if (prepend) {
     container.insertBefore(messageDiv, container.firstChild);
-    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
-      window.__earliestTimestamp = message.timestamp;
+    if (message.timestamp) {
+      if (window.__earliestTimestamp === undefined) {
+        window.__earliestTimestamp = message.timestamp;
+      } else if (message.timestamp < window.__earliestTimestamp) {
+        window.__earliestTimestamp = message.timestamp;
+      }
     }
   } else {
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
-    if (message.timestamp && (window.__earliestTimestamp === undefined || message.timestamp < window.__earliestTimestamp)) {
-      window.__earliestTimestamp = message.timestamp;
+    if (message.timestamp) {
+      if (window.__earliestTimestamp === undefined) {
+        window.__earliestTimestamp = message.timestamp;
+      } else if (message.timestamp < window.__earliestTimestamp) {
+        window.__earliestTimestamp = message.timestamp;
+      }
     }
   }
 }
