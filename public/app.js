@@ -625,15 +625,6 @@ window.addEventListener('load', () => {
   }
 
   connectSocket();
-
-  socket.on('connect', () => {
-    if (savedUsername && initialRoomId) {
-      window.__earliestTimestamp = undefined;
-      hasMoreHistory = true;
-      socket.emit('join', { roomId: initialRoomId, username: savedUsername });
-      document.getElementById('messageInput').focus();
-    }
-  });
 });
 
 function showChatScreen(name, roomId) {
