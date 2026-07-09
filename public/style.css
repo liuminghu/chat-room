@@ -2960,6 +2960,10 @@ body {
   100% { transform: rotate(0deg); }
 }
 
+.fs-hook-arm.swinging {
+  animation-timing-function: ease-in-out;
+}
+
 @keyframes fsHookDrop {
   0% { transform: rotate(var(--hook-angle, 0deg)); }
   100% { transform: rotate(var(--hook-angle, 0deg)); }

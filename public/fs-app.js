@@ -185,8 +185,11 @@ function startFishSwimming() {
 // 钩子状态
 let fsCastState = 'idle';
 let fsAnimationFrame = null;
+let fsSwingFrame = null;
 let fsCurrentRopeLength = 0;
-let fsCurrentAngle = 0;
+let fsCurrentAngle = 0;        // 当前钩子摆动角度（实时跟踪）
+let fsSwingStartTime = 0;      // 摆动动画开始时间
+let fsSwingDirection = 1;      // 摆动方向
 let fsCaughtFish = null;
 let fsCaughtRarity = '';
 let fsCaughtFishName = '';
@@ -197,6 +200,21 @@ function startHookSwing() {
   if (!hookArm) return;
   hookArm.classList.remove('dropping', 'hoisting');
   hookArm.classList.add('swinging');
+  fsCurrentAngle = 0;
+  fsSwingStartTime = performance.now();
+  fsSwingDirection = 1;
+  
+  // 持续跟踪摆动角度（解决 CSS 动画 transform 读取不准的问题）
+  if (fsSwingFrame) cancelAnimationFrame(fsSwingFrame);
+  function trackSwing() {
+    if (fsCastState !== 'idle') return;
+    const elapsed = (performance.now() - fsSwingStartTime) / 1000;
+    // 摆动周期 2.4 秒，角度从 -55° 到 55° 摆动
+    // 用 sin 函数模拟：sin(2π * t / T) * 55
+    fsCurrentAngle = Math.sin((Math.PI * elapsed) / 1.2) * 55;
+    fsSwingFrame = requestAnimationFrame(trackSwing);
+  }
+  fsSwingFrame = requestAnimationFrame(trackSwing);
 }
 
 function fsStartFishing() {
@@ -214,21 +232,24 @@ function fsStartFishing() {
   statusEl.textContent = '⤬ 放钩子...';
   statusEl.style.color = '#F59E0B';
   
+  // 停止摆动（角度已通过 trackSwing 实时跟踪）
   hookArm.classList.remove('swinging');
+  if (fsSwingFrame) cancelAnimationFrame(fsSwingFrame);
+  fsSwingFrame = null;
   
-  const computedStyle = window.getComputedStyle(hookArm);
-  const matrix = new DOMMatrix(computedStyle.transform);
-  fsCurrentAngle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+  // 固定当前角度
+  const angle = fsCurrentAngle;
+  hookArm.style.transform = `rotate(${angle}deg)`;
   
   const sceneEl = document.querySelector('.fs-fishing-scene');
   const sceneHeight = sceneEl ? sceneEl.clientHeight : 600;
   const pivotY = sceneHeight * 0.3;
   const maxRopeLength = Math.max(400, sceneHeight);
   
-  hookArm.style.setProperty('--hook-angle', fsCurrentAngle + 'deg');
+  hookArm.style.setProperty('--hook-angle', angle + 'deg');
   hookArm.style.setProperty('--rope-length', maxRopeLength + 'px');
   
-  fsAnimateDrop(maxRopeLength, fsCurrentAngle, pivotY);
+  fsAnimateDrop(maxRopeLength, angle, pivotY);
 }
 
 function fsAnimateDrop(targetRopeLength, angle, pivotY) {
