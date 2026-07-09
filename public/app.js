@@ -1672,15 +1672,14 @@ function startFishSwimming() {
   container.innerHTML = '';
   
   const fishEmojis = ['🐟', '🐠', '🐡', '🦈', '🐬', '🐋', '🐳', '🦑'];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     const fish = document.createElement('div');
     fish.className = 'fs-swimming-fish';
     fish.textContent = fishEmojis[Math.floor(Math.random() * fishEmojis.length)];
-    fish.style.left = Math.random() * 100 + '%';
-    fish.style.top = Math.random() * 60 + '%';
-    fish.style.animationDuration = (8 + Math.random() * 8) + 's';
-    fish.style.animationDelay = Math.random() * 5 + 's';
-    fish.style.fontSize = (20 + Math.random() * 20) + 'px';
+    fish.style.top = (10 + Math.random() * 70) + '%';
+    fish.style.animationDuration = (6 + Math.random() * 8) + 's';
+    fish.style.animationDelay = (Math.random() * -10) + 's';
+    fish.style.fontSize = (20 + Math.random() * 24) + 'px';
     container.appendChild(fish);
   }
 }

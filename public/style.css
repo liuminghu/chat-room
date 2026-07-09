@@ -2682,25 +2682,27 @@ body {
 
 .fs-fish-swimming {
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  height: 55%;
   overflow: hidden;
+  z-index: 5;
 }
 
 .fs-swimming-fish {
   position: absolute;
   animation: fsFishSwim linear infinite;
-  opacity: 0.7;
+  opacity: 0.8;
+  font-size: 28px;
 }
 
 @keyframes fsFishSwim {
-  0% { transform: translateX(-50px) translateY(0) scaleX(1); }
-  25% { transform: translateX(calc(25vw)) translateY(-10px) scaleX(1); }
+  0% { transform: translateX(-80px) translateY(0) scaleX(1); }
+  25% { transform: translateX(calc(25vw)) translateY(-15px) scaleX(1); }
   50% { transform: translateX(calc(50vw)) translateY(5px) scaleX(-1); }
-  75% { transform: translateX(calc(75vw)) translateY(-5px) scaleX(-1); }
-  100% { transform: translateX(calc(100vw + 50px)) translateY(0) scaleX(-1); }
+  75% { transform: translateX(calc(75vw)) translateY(-10px) scaleX(-1); }
+  100% { transform: translateX(calc(100vw + 80px)) translateY(0) scaleX(-1); }
 }
 
 .fs-ripples {
