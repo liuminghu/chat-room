@@ -389,6 +389,8 @@ const DEFAULT_ANNOUNCEMENT = `欢迎来到聊天室！🤖 小助手可以帮你
 
 📢 群管理
 • \`/公告 内容\` - 设置房间公告
+• \`/密码 密码\` - 设置房间密码（已进入房间的用户可设置）
+• \`/清除密码\` - 清除房间密码
 
 💡 小技巧：输入 @ 可艾特群成员 | 消息可点赞/引用/撤回(2分钟内)
 
@@ -1124,6 +1126,8 @@ function parseBotCommand(text) {
     }
   }
   if (t.startsWith('/公告 ')) return { cmd: 'announce', text: t.replace(/^\/公告\s*/, '') };
+  if (t.startsWith('/密码 ')) return { cmd: 'password', password: t.replace(/^\/密码\s*/, '') };
+  if (t === '/清除密码' || t === '清除密码') return { cmd: 'clearPassword' };
   return null;
 }
 
@@ -1235,6 +1239,27 @@ async function handleBotCommand(roomId, command, fromUser, rawText) {
       sendBotMsg(`📢 房间公告已更新！`);
       io.to(roomId).emit('announcementUpdated', { announcement: command.text });
       saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
+      break;
+    }
+    case 'password': {
+      const newPassword = command.password.trim();
+      if (newPassword.length === 0) {
+        sendBotMsg('密码不能为空，请重新设置！');
+        return;
+      }
+      if (newPassword.length > 20) {
+        sendBotMsg('密码最长20个字符，请重新设置！');
+        return;
+      }
+      room.password = newPassword;
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, password: newPassword });
+      sendBotMsg(`🔒 房间密码已设置！新加入的用户需要输入密码才能进入。`);
+      break;
+    }
+    case 'clearPassword': {
+      room.password = null;
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, password: null });
+      sendBotMsg(`🔓 房间密码已清除，任何人都可以自由加入了！`);
       break;
     }
   }
