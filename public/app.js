@@ -329,10 +329,12 @@ function connectSocket() {
 
   socket.on('fishCaught', (data) => {
     showFishCaughtResult(data);
+    showFsFishCaughtResult(data);
   });
 
   socket.on('backpackData', (data) => {
     renderBackpack(data);
+    renderFsBackpack(data);
   });
 
   socket.on('sellResult', (data) => {
@@ -340,6 +342,7 @@ function connectSocket() {
       showToast(data.message, 'success');
       renderBackpack(data.backpack);
       updateBackpackPoints(data.points);
+      renderFsBackpack(data.backpack);
     } else {
       showToast(data.message, 'error');
     }
@@ -1577,7 +1580,8 @@ document.querySelectorAll('.hall-game-card').forEach(card => {
   card.addEventListener('click', () => {
     const game = card.dataset.game;
     if (game === 'fishing') {
-      switchGameTab('fishing');
+      closeGameCenter();
+      openFullscreenFishing();
     } else if (game === 'dice') {
       closeGameCenter();
       rollDice();
@@ -1589,6 +1593,208 @@ document.querySelectorAll('.hall-game-card').forEach(card => {
 });
 
 document.getElementById('fishBtn').addEventListener('click', startFishing);
+
+let fsIsFishing = false;
+
+function openFullscreenFishing() {
+  document.getElementById('fullscreenFishing').classList.remove('hidden');
+  document.getElementById('chat-container').classList.add('hidden');
+  if (socket) socket.emit('getBackpack');
+  startFishSwimming();
+}
+
+function closeFullscreenFishing() {
+  document.getElementById('fullscreenFishing').classList.add('hidden');
+  document.getElementById('chat-container').classList.remove('hidden');
+  stopFishSwimming();
+}
+
+function startFishSwimming() {
+  const container = document.getElementById('fsFishSwimming');
+  container.innerHTML = '';
+  
+  const fishEmojis = ['🐟', '🐠', '🐡', '🦈', '🐬', '🐋', '🐳', '🦑'];
+  for (let i = 0; i < 6; i++) {
+    const fish = document.createElement('div');
+    fish.className = 'fs-swimming-fish';
+    fish.textContent = fishEmojis[Math.floor(Math.random() * fishEmojis.length)];
+    fish.style.left = Math.random() * 100 + '%';
+    fish.style.top = Math.random() * 60 + '%';
+    fish.style.animationDuration = (8 + Math.random() * 8) + 's';
+    fish.style.animationDelay = Math.random() * 5 + 's';
+    fish.style.fontSize = (20 + Math.random() * 20) + 'px';
+    container.appendChild(fish);
+  }
+}
+
+function stopFishSwimming() {
+  document.getElementById('fsFishSwimming').innerHTML = '';
+}
+
+function fsStartFishing() {
+  if (fsIsFishing || !socket) return;
+  fsIsFishing = true;
+  
+  const fishBtn = document.getElementById('fsFishBtn');
+  const statusEl = document.getElementById('fsStatus');
+  const rodFloat = document.getElementById('fsRodFloat');
+  
+  fishBtn.disabled = true;
+  fishBtn.textContent = '🎣 钓鱼中...';
+  statusEl.textContent = '等待上钩...';
+  statusEl.style.color = '#F59E0B';
+  
+  rodFloat.style.animation = 'fsFloatBob 1.5s ease-in-out infinite';
+  
+  createRipple();
+  
+  socket.emit('startFishing');
+}
+
+function createRipple() {
+  const container = document.getElementById('fsRipples');
+  const ripple = document.createElement('div');
+  ripple.className = 'fs-ripple';
+  ripple.style.left = '50%';
+  ripple.style.top = '60%';
+  container.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 2000);
+}
+
+function showFsFishCaughtResult(data) {
+  fsIsFishing = false;
+  
+  const fishBtn = document.getElementById('fsFishBtn');
+  const statusEl = document.getElementById('fsStatus');
+  const rodFloat = document.getElementById('fsRodFloat');
+  const resultEl = document.getElementById('fsFishResult');
+  const totalEl = document.getElementById('fsTotal');
+  
+  fishBtn.disabled = false;
+  fishBtn.textContent = '🎣 继续钓鱼';
+  statusEl.textContent = '收获满满！';
+  statusEl.style.color = '#10B981';
+  rodFloat.style.animation = '';
+  
+  if (data.backpack) {
+    totalEl.textContent = data.backpack.totalCaught || 0;
+  }
+  
+  document.getElementById('fsFishEmoji').textContent = data.fish.emoji;
+  document.getElementById('fsFishName').textContent = data.fish.name;
+  document.getElementById('fsFishRarity').textContent = data.rarityInfo.name;
+  document.getElementById('fsFishRarity').style.color = data.rarityInfo.color;
+  document.getElementById('fsFishPoints').textContent = `+${data.fish.points} 积分`;
+  
+  resultEl.classList.remove('hidden');
+  resultEl.querySelector('.fs-fish-result-inner').style.animation = 'none';
+  void resultEl.querySelector('.fs-fish-result-inner').offsetWidth;
+  resultEl.querySelector('.fs-fish-result-inner').style.animation = 'fsFishPopIn 0.6s ease-out';
+  
+  if (data.rarity === 'legendary') {
+    triggerEmojiRain('恭喜');
+  }
+  
+  setTimeout(() => {
+    resultEl.classList.add('hidden');
+  }, 2500);
+}
+
+function renderFsBackpack(data) {
+  const grid = document.getElementById('fsBagGrid');
+  const totalEl = document.getElementById('fsBagTotal');
+  const totalPointsEl = document.getElementById('fsPoints');
+  const bagPointsEl = document.getElementById('fsBagPoints');
+  
+  if (!data || !data.fishes || Object.keys(data.fishes).length === 0) {
+    grid.innerHTML = '<div class="fs-bag-empty">还没有钓到鱼，快去钓鱼吧！</div>';
+    totalEl.textContent = data?.totalCaught || 0;
+    return;
+  }
+  
+  totalEl.textContent = data.totalCaught || 0;
+  
+  const fishList = [
+    { name: '黄金龙', emoji: '🐲', rarity: 'legendary', points: 200 },
+    { name: '美人鱼', emoji: '🧜', rarity: 'legendary', points: 150 },
+    { name: '鲲', emoji: '🐋', rarity: 'legendary', points: 300 },
+    { name: '金龙鱼', emoji: '🐉', rarity: 'epic', points: 50 },
+    { name: '胭脂鱼', emoji: '🐠', rarity: 'epic', points: 40 },
+    { name: '中华鲟', emoji: '🐟', rarity: 'epic', points: 60 },
+    { name: '鲈鱼', emoji: '🐟', rarity: 'rare', points: 15 },
+    { name: '鲑鱼', emoji: '🐠', rarity: 'rare', points: 18 },
+    { name: '鳜鱼', emoji: '🐟', rarity: 'rare', points: 20 },
+    { name: '黑鱼', emoji: '🐟', rarity: 'rare', points: 15 },
+    { name: '小鲫鱼', emoji: '🐟', rarity: 'common', points: 2 },
+    { name: '鲤鱼', emoji: '🐠', rarity: 'common', points: 3 },
+    { name: '草鱼', emoji: '🐟', rarity: 'common', points: 3 },
+    { name: '小杂鱼', emoji: '🐡', rarity: 'common', points: 1 },
+    { name: '泥鳅', emoji: '🐍', rarity: 'common', points: 2 },
+    { name: '生锈硬币', emoji: '🪙', rarity: 'junk', points: 5 },
+    { name: '破靴子', emoji: '👢', rarity: 'junk', points: 0 },
+    { name: '空瓶子', emoji: '🍾', rarity: 'junk', points: 0 },
+    { name: '旧草帽', emoji: '👒', rarity: 'junk', points: 0 }
+  ];
+  
+  const rarityColors = {
+    legendary: '#F59E0B',
+    epic: '#8B5CF6',
+    rare: '#3B82F6',
+    common: '#9CA3AF',
+    junk: '#6B7280'
+  };
+  
+  const rarityNames = {
+    legendary: '传说',
+    epic: '史诗',
+    rare: '稀有',
+    common: '普通',
+    junk: '杂物'
+  };
+  
+  let totalPoints = 0;
+  grid.innerHTML = '';
+  for (const fish of fishList) {
+    const count = data.fishes[fish.name] || 0;
+    totalPoints += count * fish.points;
+    const item = document.createElement('div');
+    item.className = `fs-bag-item ${count > 0 ? '' : 'locked'}`;
+    item.style.borderColor = rarityColors[fish.rarity];
+    item.innerHTML = `
+      <div class="fs-bag-emoji">${fish.emoji}</div>
+      <div class="fs-bag-name">${fish.name}</div>
+      <div class="fs-bag-rarity" style="color: ${rarityColors[fish.rarity]}">${rarityNames[fish.rarity]}</div>
+      <div class="fs-bag-count">${count > 0 ? `x${count}` : '未获得'}</div>
+      <div class="fs-bag-points">${fish.points}分</div>
+    `;
+    if (count > 0) {
+      item.addEventListener('click', () => {
+        if (confirm(`确定卖出 1 条${fish.name}？可获得 ${fish.points} 积分`)) {
+          socket.emit('sellFish', { fishName: fish.name });
+        }
+      });
+    }
+    grid.appendChild(item);
+  }
+  
+  if (totalPointsEl) totalPointsEl.textContent = totalPoints;
+  if (bagPointsEl) bagPointsEl.textContent = totalPoints;
+}
+
+function openFsBag() {
+  document.getElementById('fsBagModal').classList.remove('hidden');
+  if (socket) socket.emit('getBackpack');
+}
+
+function closeFsBag() {
+  document.getElementById('fsBagModal').classList.add('hidden');
+}
+
+document.getElementById('fsBackBtn').addEventListener('click', closeFullscreenFishing);
+document.getElementById('fsFishBtn').addEventListener('click', fsStartFishing);
+document.getElementById('fsBagBtn').addEventListener('click', openFsBag);
+document.getElementById('fsBagCloseBtn').addEventListener('click', closeFsBag);
+document.querySelector('#fsBagModal .fs-bag-overlay').addEventListener('click', closeFsBag);
 
 const messageInput = document.getElementById('messageInput');
 messageInput.addEventListener('input', handleMentionInput);
