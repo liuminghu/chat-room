@@ -326,18 +326,32 @@
         </div>
         <div class="fs-ripples" id="fsRipples"></div>
       </div>
-      <div class="fs-fish-swimming" id="fsFishSwimming"></div>
+      <div class="fs-fish-swimming" id="fsFishSwimming" style="display:none"></div>
       <div class="fs-dock">
         <div class="fs-dock-plank"></div>
         <div class="fs-dock-plank"></div>
         <div class="fs-dock-plank"></div>
       </div>
-      <div class="fs-rod" id="fsRod">
-        <div class="fs-rod-line" id="fsRodLine"></div>
-        <div class="fs-rod-hook-area" id="fsRodHookArea">
-          <div class="fs-rod-float" id="fsRodFloat">🎣</div>
-          <div class="fs-fish-bite" id="fsFishBite"></div>
+      <div class="fs-water">
+        <div class="fs-waves">
+          <div class="fs-wave fs-wave1"></div>
+          <div class="fs-wave fs-wave2"></div>
+          <div class="fs-wave fs-wave3"></div>
         </div>
+        <div class="fs-ripples" id="fsRipples"></div>
+        <!-- 静态鱼和物品（黄金矿工玩法） -->
+        <div class="fs-fish-container" id="fsFishContainer"></div>
+      </div>
+      <!-- 黄金矿工式钩子：从中心旋转摆动 -->
+      <div class="fs-hook-system" id="fsHookSystem">
+        <div class="fs-hook-pivot">⚓</div>
+        <div class="fs-hook-arm" id="fsHookArm">
+          <div class="fs-hook-rope"></div>
+          <div class="fs-hook-claw" id="fsHookClaw">
+            <span class="fs-hook-icon">🪝</span>
+          </div>
+        </div>
+        <div class="fs-caught-item" id="fsCaughtItem"></div>
       </div>
     </div>
     <div class="fs-ui">

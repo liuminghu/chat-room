@@ -1688,10 +1688,13 @@ function startFishSwimming() {
   const container = document.getElementById('fsFishSwimming');
   container.innerHTML = '';
   
-  // 稀有度配置：每种稀有度对应的鱼emoji和速度
+  // 黄金矿工式：生成静态鱼和物品，随机分布在水中
+  const fishContainer = document.getElementById('fsFishContainer');
+  fishContainer.innerHTML = '';
+  
   const fishConfig = [
-    { rarity: 'junk', emojis: ['👢', '🍾', '👒', '🪙'], weight: 0.05 },
-    { rarity: 'common', emojis: ['🐟', '🐠', '🐡', '🐍'], weight: 0.55 },
+    { rarity: 'junk', emojis: ['👢', '🍾', '👒', '🪙'], weight: 0.10 },
+    { rarity: 'common', emojis: ['🐟', '🐠', '🐡', '🐍'], weight: 0.50 },
     { rarity: 'rare', emojis: ['🐟', '🐠'], weight: 0.25 },
     { rarity: 'epic', emojis: ['🐉', '🐠', '🐟'], weight: 0.12 },
     { rarity: 'legendary', emojis: ['🐲', '🧜', '🐋'], weight: 0.03 }
@@ -1707,199 +1710,301 @@ function startFishSwimming() {
     return fishConfig[1];
   }
   
-  for (let i = 0; i < 8; i++) {
+  // 黄金矿工：每个物品有自己的"重量"影响回收速度
+  const weightMap = {
+    'junk': 0.3,      // 杂物轻，快速回
+    'common': 0.5,    // 普通
+    'rare': 0.8,      // 稀有较重
+    'epic': 1.2,      // 史诗更重
+    'legendary': 1.8  // 传说最重
+  };
+  
+  const itemCount = 12; // 生成12个物品
+  const placedPositions = [];
+  
+  for (let i = 0; i < itemCount; i++) {
     const cfg = pickRarity();
     const fish = document.createElement('div');
-    fish.className = `fs-swimming-fish rarity-${cfg.rarity}`;
+    fish.className = `fs-static-fish rarity-${cfg.rarity}`;
     fish.textContent = cfg.emojis[Math.floor(Math.random() * cfg.emojis.length)];
-    fish.style.top = (10 + Math.random() * 70) + '%';
-    fish.style.animationDuration = (4 + Math.random() * 12) + 's';
-    fish.style.animationDelay = (Math.random() * -10) + 's';
-    fish.style.fontSize = cfg.rarity === 'legendary' ? (28 + Math.random() * 12) + 'px' : (20 + Math.random() * 18) + 'px';
     fish.dataset.rarity = cfg.rarity;
-    container.appendChild(fish);
+    fish.dataset.weight = weightMap[cfg.rarity];
+    fish.dataset.index = i;
+    
+    // 随机位置：在水域范围内均匀分布
+    let x, y, attempts = 0;
+    do {
+      x = 5 + Math.random() * 90; // 5%-95%
+      y = 15 + Math.random() * 80; // 15%-95%
+      attempts++;
+      // 检查是否和已有物品重叠
+      let overlap = false;
+      for (const pos of placedPositions) {
+        const dx = Math.abs(pos.x - x);
+        const dy = Math.abs(pos.y - y);
+        if (dx < 12 && dy < 14) { overlap = true; break; }
+      }
+      if (!overlap) break;
+    } while (attempts < 30);
+    
+    fish.style.left = x + '%';
+    fish.style.top = y + '%';
+    placedPositions.push({ x, y });
+    
+    fishContainer.appendChild(fish);
   }
+  
+  // 启动钩子摆动
+  startHookSwing();
+}
+
+// 黄金矿工式：钩子摆动控制
+function startHookSwing() {
+  const hookArm = document.getElementById('fsHookArm');
+  if (!hookArm) return;
+  hookArm.classList.remove('dropping', 'hoisting');
+  hookArm.classList.add('swinging');
 }
 
 function stopFishSwimming() {
   document.getElementById('fsFishSwimming').innerHTML = '';
 }
 
-// 钓鱼状态
-let fsCastState = 'idle'; // idle | casting | waiting | biting | reeling | done
-let fsCheckFishInterval = null;
-let fsCastTimeout = null;
-let fsMaxWaitTimer = null;
+// 黄金矿工式钓鱼状态
+let fsCastState = 'idle'; // idle | dropping | hoisting
+let fsAnimationFrame = null;
+let fsCurrentRopeLength = 0;
+let fsCurrentAngle = 0;
+let fsCaughtFish = null;
+let fsCaughtRarity = '';
 
 function fsStartFishing() {
   if (fsCastState !== 'idle' || !socket) return;
-  fsCastState = 'casting';
+  fsCastState = 'dropping';
   
   const fishBtn = document.getElementById('fsFishBtn');
   const statusEl = document.getElementById('fsStatus');
-  const rodLine = document.getElementById('fsRodLine');
-  const rodFloat = document.getElementById('fsRodFloat');
-  const fishBite = document.getElementById('fsFishBite');
+  const hookArm = document.getElementById('fsHookArm');
+  
+  if (!hookArm) return;
   
   fishBtn.disabled = true;
-  fishBtn.textContent = '🎣 抛竿中...';
-  statusEl.textContent = '🎯 抛竿...';
+  fishBtn.textContent = '🎣 收线';
+  statusEl.textContent = '⤬ 放钩子...';
   statusEl.style.color = '#F59E0B';
   
-  // 鱼钩归位（清除上一次的状态）
-  fishBite.classList.remove('biting');
-  fishBite.textContent = '';
+  // 停止摆动
+  hookArm.classList.remove('swinging');
   
-  // 鱼线抛出动画
-  setTimeout(() => {
-    rodLine.classList.add('cast');
-    rodFloat.classList.add('cast');
-  }, 50);
+  // 捕获当前角度
+  const computedStyle = window.getComputedStyle(hookArm);
+  const matrix = new DOMMatrix(computedStyle.transform);
+  fsCurrentAngle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
   
-  createRipple();
+  // 计算绳长：让钩子能到达水域底部
+  const sceneEl = document.querySelector('.fs-fishing-scene');
+  const sceneHeight = sceneEl ? sceneEl.clientHeight : 600;
+  const pivotY = sceneHeight * 0.3;
+  // 钩子末端需要到达 scene 95% 位置
+  const targetY = sceneHeight * 0.95;
+  const dy = targetY - pivotY;
+  // 绳子长度 = dy / cos(当前角度的余角)
+  // 简化：使用最大可能长度
+  const maxRopeLength = Math.max(400, sceneHeight);
   
-  // 抛出完成，进入等待状态
-  fsCastTimeout = setTimeout(() => {
-    fsCastState = 'waiting';
-    statusEl.textContent = '🐟 等待鱼上钩...';
-    statusEl.style.color = '#3B82F6';
-    fishBtn.textContent = '🎣 收线';
-    fishBtn.disabled = false;
-    fishBtn.onclick = fsReelIn;
-    
-    // 鱼钩入水后开始检测鱼游过
-    fsCheckFishInterval = setInterval(fsCheckFishNearHook, 100);
-    
-    // 设置最大等待时间（30秒）
-    fsMaxWaitTimer = setTimeout(() => {
-      if (fsCastState === 'waiting') {
-        statusEl.textContent = '😴 没鱼上钩...';
-        statusEl.style.color = '#9CA3AF';
-        fsReelIn();
-      }
-    }, 30000);
-  }, 600);
+  // 设置 CSS 变量
+  hookArm.style.setProperty('--hook-angle', fsCurrentAngle + 'deg');
+  hookArm.style.setProperty('--rope-length', maxRopeLength + 'px');
+  
+  fsAnimateDrop(maxRopeLength, fsCurrentAngle, pivotY);
 }
 
-// 检测鱼是否游到鱼钩附近
-function fsCheckFishNearHook() {
-  if (fsCastState !== 'waiting') return;
+function fsAnimateDrop(targetRopeLength, angle, pivotY) {
+  const hookArm = document.getElementById('fsHookArm');
+  const hookRope = hookArm.querySelector('.fs-hook-rope');
+  const hookClaw = document.getElementById('fsHookClaw');
   
-  const rodFloat = document.getElementById('fsRodFloat');
-  const floatRect = rodFloat.getBoundingClientRect();
-  const floatCenterX = floatRect.left + floatRect.width / 2;
-  const floatCenterY = floatRect.top + floatRect.height / 2;
+  if (!hookArm || !hookRope || !hookClaw) return;
   
-  // 鱼钩捕获半径（根据稀有度调整）
-  // 普通鱼半径大，传说鱼半径小（更难勾中）
-  const catchRadius = 50;
+  fsCurrentRopeLength = 0;
+  const startTime = performance.now();
+  const dropDuration = 700; // ms
   
-  const fishes = document.querySelectorAll('.fs-swimming-fish');
-  for (const fish of fishes) {
-    const fishRect = fish.getBoundingClientRect();
-    if (fishRect.width === 0) continue;
-    const fishCenterX = fishRect.left + fishRect.width / 2;
-    const fishCenterY = fishRect.top + fishRect.height / 2;
+  function step(now) {
+    if (fsCastState !== 'dropping') return;
     
-    const dx = fishCenterX - floatCenterX;
-    const dy = fishCenterY - floatCenterY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / dropDuration, 1);
+    // ease-in: 加速下降
+    const eased = progress * progress;
+    fsCurrentRopeLength = targetRopeLength * eased;
     
-    if (distance < catchRadius + Math.random() * 20) {
-      // 鱼游到鱼钩附近
-      const rarity = fish.dataset.rarity || 'common';
-      // 传说级鱼需要更近距离才上钩
-      const requiredDistance = {
-        'junk': 80,
-        'common': 50,
-        'rare': 35,
-        'epic': 25,
-        'legendary': 18
-      }[rarity] || 50;
+    // 设置绳子长度
+    hookRope.style.height = fsCurrentRopeLength + 'px';
+    
+    // 计算钩子末端位置（屏幕坐标）
+    const rad = (angle - 90) * Math.PI / 180;
+    const pivotX = window.innerWidth / 2;
+    const clawX = pivotX + Math.cos(rad) * fsCurrentRopeLength;
+    const clawY = pivotY + Math.sin(rad) * fsCurrentRopeLength;
+    
+    // 钩子固定定位
+    hookClaw.style.position = 'fixed';
+    hookClaw.style.left = clawX + 'px';
+    hookClaw.style.top = clawY + 'px';
+    hookClaw.style.transform = 'translate(-50%, 0)';
+    
+    // 检测碰撞
+    const caughtFish = fsCheckHookCollision(clawX, clawY);
+    if (caughtFish) {
+      fsCaughtFish = caughtFish;
+      fsCaughtRarity = caughtFish.dataset.rarity;
+      caughtFish.style.opacity = '0';
+      caughtFish.classList.add('caught');
       
-      if (distance < requiredDistance) {
-        fsFishBite(fish, rarity);
-        return;
-      }
+      const caughtItem = document.getElementById('fsCaughtItem');
+      caughtItem.textContent = caughtFish.textContent;
+      caughtItem.style.position = 'fixed';
+      caughtItem.style.left = clawX + 'px';
+      caughtItem.style.top = (clawY + 40) + 'px';
+      caughtItem.classList.add('show');
+      
+      fsStartHoist(angle, targetRopeLength, pivotY);
+      return;
+    }
+    
+    if (progress < 1) {
+      fsAnimationFrame = requestAnimationFrame(step);
+    } else {
+      fsStartHoist(angle, targetRopeLength, pivotY);
     }
   }
+  fsAnimationFrame = requestAnimationFrame(step);
 }
 
-// 鱼咬钩
-function fsFishBite(fishEl, rarity) {
-  if (fsCastState !== 'waiting') return;
-  fsCastState = 'biting';
-  
-  clearInterval(fsCheckFishInterval);
-  clearTimeout(fsMaxWaitTimer);
-  fsCheckFishInterval = null;
-  
-  const fishBite = document.getElementById('fsFishBite');
-  const statusEl = document.getElementById('fsStatus');
-  const fishBtn = document.getElementById('fsFishBtn');
-  
-  // 显示被勾中的鱼
-  fishBite.textContent = fishEl.textContent;
-  fishBite.classList.add('biting');
-  fishEl.style.opacity = '0.3';
-  
-  // 状态提示
-  const rarityNames = { common: '普通', rare: '稀有', epic: '史诗', legendary: '传说', junk: '杂物' };
-  const rarityColors = { common: '#9CA3AF', rare: '#3B82F6', epic: '#8B5CF6', legendary: '#F59E0B', junk: '#6B7280' };
-  statusEl.textContent = `✨ ${rarityNames[rarity]}鱼上钩了！快收线！`;
-  statusEl.style.color = rarityColors[rarity];
-  fishBtn.textContent = '⤴️ 收线中...';
-  fishBtn.disabled = true;
-  
-  // 1.4秒后自动收线（咬钩动画结束）
-  setTimeout(() => {
-    fsReelIn(rarity);
-  }, 1400);
+function fsCheckHookCollision(clawX, clawY) {
+  const fishes = document.querySelectorAll('.fs-static-fish:not(.caught)');
+  for (const fish of fishes) {
+    const rect = fish.getBoundingClientRect();
+    if (rect.width === 0) continue;
+    const fx = rect.left + rect.width / 2;
+    const fy = rect.top + rect.height / 2;
+    const dx = fx - clawX;
+    const dy = fy - clawY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 45) {
+      return fish;
+    }
+  }
+  return null;
 }
 
-// 收线
-function fsReelIn(caughtRarity = null) {
-  if (fsCastState === 'idle' || fsCastState === 'done' || fsCastState === 'reeling') return;
-  fsCastState = 'reeling';
+function fsStartHoist(angle, ropeLength, pivotY) {
+  if (fsCastState === 'hoisting') return;
+  fsCastState = 'hoisting';
   
-  clearInterval(fsCheckFishInterval);
-  clearTimeout(fsMaxWaitTimer);
-  fsCheckFishInterval = null;
-  
-  const fishBtn = document.getElementById('fsFishBtn');
   const statusEl = document.getElementById('fsStatus');
-  const rodLine = document.getElementById('fsRodLine');
-  const rodFloat = document.getElementById('fsRodFloat');
-  const fishBite = document.getElementById('fsFishBite');
+  const fishBtn = document.getElementById('fsFishBtn');
+  const caughtItem = document.getElementById('fsCaughtItem');
   
-  fishBtn.textContent = '🎣 收线中...';
+  const hasCaught = !!fsCaughtFish;
+  const weight = hasCaught ? parseFloat(fsCaughtFish.dataset.weight) || 0.5 : 0.5;
+  
+  // 黄金矿工核心：物品越重，收线越慢
+  const baseDuration = 1200;
+  const hoistDuration = baseDuration * weight;
+  
+  const startTime = performance.now();
+  const startLength = fsCurrentRopeLength;
+  
+  if (hasCaught) {
+    const rarityNames = { common: '普通', rare: '稀有', epic: '史诗', legendary: '传说', junk: '杂物' };
+    statusEl.textContent = `⤴ 收回中...（${rarityNames[fsCaughtRarity] || ''}）`;
+    statusEl.style.color = '#10B981';
+  } else {
+    statusEl.textContent = '😢 这次没勾到...';
+    statusEl.style.color = '#9CA3AF';
+  }
+  fishBtn.textContent = '⤴ 收线中...';
   fishBtn.disabled = true;
-  if (fishBtn.onclick) fishBtn.onclick = null;
-  statusEl.textContent = '⤴️ 收线中...';
   
-  // 收线动画
-  rodLine.classList.remove('cast');
-  rodLine.classList.add('reeling');
-  rodFloat.classList.remove('cast');
-  rodFloat.classList.add('reeling');
-  
-  // 收线完成
-  setTimeout(() => {
-    rodLine.classList.remove('reeling');
-    rodFloat.classList.remove('reeling');
-    fishBite.classList.remove('biting');
-    fishBite.textContent = '';
+  function step(now) {
+    if (fsCastState !== 'hoisting') return;
     
-    // 通知服务器此次钓鱼结果
-    if (caughtRarity && socket) {
-      socket.emit('startFishing', { expectedRarity: caughtRarity });
-    } else if (socket) {
-      // 没勾到鱼，调用服务器默认随机
-      socket.emit('startFishing');
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / hoistDuration, 1);
+    // ease-out: 慢->快
+    const eased = 1 - Math.pow(1 - progress, 2);
+    const newLength = startLength * (1 - eased);
+    
+    const hookArm = document.getElementById('fsHookArm');
+    const hookRope = hookArm.querySelector('.fs-hook-rope');
+    const hookClaw = document.getElementById('fsHookClaw');
+    
+    hookRope.style.height = newLength + 'px';
+    
+    const rad = (angle - 90) * Math.PI / 180;
+    const pivotX = window.innerWidth / 2;
+    const clawX = pivotX + Math.cos(rad) * newLength;
+    const clawY = pivotY + Math.sin(rad) * newLength;
+    
+    hookClaw.style.left = clawX + 'px';
+    hookClaw.style.top = clawY + 'px';
+    
+    if (hasCaught && caughtItem) {
+      caughtItem.style.left = clawX + 'px';
+      caughtItem.style.top = (clawY + 40) + 'px';
     }
     
+    if (progress < 1) {
+      fsAnimationFrame = requestAnimationFrame(step);
+    } else {
+      fsFishingComplete(hasCaught);
+    }
+  }
+  fsAnimationFrame = requestAnimationFrame(step);
+}
+
+function fsFishingComplete(hasCaught) {
+  const hookArm = document.getElementById('fsHookArm');
+  const hookRope = hookArm.querySelector('.fs-hook-rope');
+  const hookClaw = document.getElementById('fsHookClaw');
+  const caughtItem = document.getElementById('fsCaughtItem');
+  const fishBtn = document.getElementById('fsFishBtn');
+  const statusEl = document.getElementById('fsStatus');
+  
+  // 通知服务器
+  if (hasCaught && socket) {
+    socket.emit('startFishing', { expectedRarity: fsCaughtRarity });
+  } else if (socket) {
+    socket.emit('startFishing', { missed: true });
+  }
+  
+  setTimeout(() => {
+    hookArm.style.transform = '';
+    hookRope.style.height = '0px';
+    hookClaw.style.left = '';
+    hookClaw.style.top = '';
+    hookClaw.style.position = '';
+    hookClaw.style.transform = '';
+    caughtItem.classList.remove('show');
+    caughtItem.textContent = '';
+    caughtItem.style.left = '';
+    caughtItem.style.top = '';
+    caughtItem.style.position = '';
+    
+    fsCaughtFish = null;
+    fsCaughtRarity = '';
+    fsCurrentRopeLength = 0;
     fsCastState = 'idle';
-  }, 800);
+    
+    startHookSwing();
+    
+    fishBtn.textContent = '🎣 放钩子';
+    fishBtn.disabled = false;
+    statusEl.textContent = '准备就绪';
+    statusEl.style.color = '#10B981';
+  }, 600);
 }
 
 function createRipple() {
@@ -1913,18 +2018,14 @@ function createRipple() {
 }
 
 function showFsFishCaughtResult(data) {
-  fsIsFishing = false;
-  fsCastState = 'idle';
-  
   const fishBtn = document.getElementById('fsFishBtn');
   const statusEl = document.getElementById('fsStatus');
   const rodFloat = document.getElementById('fsRodFloat');
   const resultEl = document.getElementById('fsFishResult');
   const totalEl = document.getElementById('fsTotal');
   
-  // 恢复按钮为初始状态
   fishBtn.disabled = false;
-  fishBtn.textContent = '🎣 抛竿钓鱼';
+  fishBtn.textContent = '🎣 放钩子';
   fishBtn.onclick = fsStartFishing;
   rodFloat.style.animation = '';
   
@@ -1952,6 +2053,9 @@ function showFsFishCaughtResult(data) {
     
     statusEl.textContent = '😱 鱼脱钩了！';
     statusEl.style.color = '#EF4444';
+  } else if (data.missed) {
+    statusEl.textContent = '😢 空钩而归';
+    statusEl.style.color = '#9CA3AF';
   } else {
     statusEl.textContent = '收获满满！';
     statusEl.style.color = '#10B981';

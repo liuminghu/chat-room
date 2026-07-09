@@ -827,19 +827,39 @@ io.on('connection', (socket) => {
     }
 
     // 客户端传入了预期稀有度（鱼已经游到鱼钩附近被勾中）
-    // 按预期稀有度出鱼，但越稀有的有概率钓空（鱼脱钩）
     const expectedRarity = data && data.expectedRarity;
+    
+    // 黄金矿工：完全没勾到鱼（missed=true）
+    if (data && data.missed) {
+      // 给个安慰奖：junk 杂物
+      const fishPool = FISH_DATA.junk;
+      const fish = fishPool[Math.floor(Math.random() * fishPool.length)];
+      const rarityInfo = FISH_RARITY.junk;
+      const bp = room.gameData.backpacks[username];
+      bp.fishes[fish.name] = (bp.fishes[fish.name] || 0) + 1;
+      bp.totalCaught++;
+      socket.emit('fishCaught', {
+        fish: fish,
+        rarity: 'junk',
+        rarityInfo: rarityInfo,
+        backpack: bp,
+        missed: true
+      });
+      saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, gameData: room.gameData });
+      return;
+    }
+    
     let caughtRarity = 'junk';
     
     if (expectedRarity && FISH_DATA[expectedRarity]) {
       // 鱼脱钩概率：越稀有越容易脱钩
       const escapeRate = {
         'junk': 0,
-        'common': 0.15,
-        'rare': 0.35,
-        'epic': 0.55,
-        'legendary': 0.75
-      }[expectedRarity] || 0.15;
+        'common': 0.10,
+        'rare': 0.25,
+        'epic': 0.40,
+        'legendary': 0.55
+      }[expectedRarity] || 0.10;
       
       if (Math.random() < escapeRate) {
         // 鱼脱钩了！按低一档稀有度给个"安慰奖"
@@ -870,7 +890,7 @@ io.on('connection', (socket) => {
       }
       caughtRarity = expectedRarity;
     } else {
-      // 没有咬钩，纯随机出鱼
+      // 没有目标，纯随机出鱼
       const rand = Math.random();
       let cumulative = 0;
       for (const [rarity, data] of Object.entries(FISH_RARITY)) {
