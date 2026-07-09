@@ -1731,18 +1731,18 @@ function startFishSwimming() {
     fish.dataset.weight = weightMap[cfg.rarity];
     fish.dataset.index = i;
     
-    // 随机位置：在水域范围内均匀分布
+    // 随机位置：在鱼容器范围内均匀分布（容器 0-100%）
     let x, y, attempts = 0;
     do {
       x = 5 + Math.random() * 90; // 5%-95%
-      y = 15 + Math.random() * 80; // 15%-95%
+      y = 5 + Math.random() * 90; // 5%-95%
       attempts++;
       // 检查是否和已有物品重叠
       let overlap = false;
       for (const pos of placedPositions) {
         const dx = Math.abs(pos.x - x);
         const dy = Math.abs(pos.y - y);
-        if (dx < 12 && dy < 14) { overlap = true; break; }
+        if (dx < 14 && dy < 16) { overlap = true; break; }
       }
       if (!overlap) break;
     } while (attempts < 30);
@@ -1842,11 +1842,17 @@ function fsAnimateDrop(targetRopeLength, angle, pivotY) {
     // 设置绳子长度
     hookRope.style.height = fsCurrentRopeLength + 'px';
     
-    // 计算钩子末端位置（屏幕坐标）
-    const rad = (angle - 90) * Math.PI / 180;
+    // 关键修正：angle 是钩子支点旋转角度（顺时针为正）
+    // CSS rotate: 0° = 向下（绳子的初始方向）
+    // 我们需要让钩子只往"下"的方向摆动
+    // 当 angle > 0 时钩子向右下，angle < 0 时钩子向左下
+    // 屏幕坐标：Y 向下递增
+    // 绳子方向角 = angle（弧度）
+    // 钩子位置：x = pivotX + sin(angle) * length, y = pivotY + cos(angle) * length
+    const rad = angle * Math.PI / 180;
     const pivotX = window.innerWidth / 2;
-    const clawX = pivotX + Math.cos(rad) * fsCurrentRopeLength;
-    const clawY = pivotY + Math.sin(rad) * fsCurrentRopeLength;
+    const clawX = pivotX + Math.sin(rad) * fsCurrentRopeLength;
+    const clawY = pivotY + Math.cos(rad) * fsCurrentRopeLength;
     
     // 钩子固定定位
     hookClaw.style.position = 'fixed';
@@ -1943,10 +1949,10 @@ function fsStartHoist(angle, ropeLength, pivotY) {
     
     hookRope.style.height = newLength + 'px';
     
-    const rad = (angle - 90) * Math.PI / 180;
+    const rad = angle * Math.PI / 180;
     const pivotX = window.innerWidth / 2;
-    const clawX = pivotX + Math.cos(rad) * newLength;
-    const clawY = pivotY + Math.sin(rad) * newLength;
+    const clawX = pivotX + Math.sin(rad) * newLength;
+    const clawY = pivotY + Math.cos(rad) * newLength;
     
     hookClaw.style.left = clawX + 'px';
     hookClaw.style.top = clawY + 'px';
