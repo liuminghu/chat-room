@@ -2682,31 +2682,31 @@ body {
 
 .fs-fish-swimming {
   position: absolute;
-  top: 10%;
+  top: 55%;
   left: 0;
   right: 0;
   bottom: 0;
   overflow: visible;
-  z-index: 8;
+  z-index: 25;
   pointer-events: none;
 }
 
 .fs-swimming-fish {
   position: absolute;
-  left: 0;
+  left: -10%;
   animation: fsFishSwim linear infinite;
-  opacity: 0.85;
+  opacity: 0.9;
   font-size: 28px;
-  will-change: transform;
+  will-change: left, transform;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
 @keyframes fsFishSwim {
-  0% { transform: translateX(-60px) translateY(0) scaleX(1); }
-  25% { transform: translateX(calc(100% * 0.25)) translateY(-15px) scaleX(1); }
-  50% { transform: translateX(calc(100% * 0.5)) translateY(5px) scaleX(-1); }
-  75% { transform: translateX(calc(100% * 0.75)) translateY(-10px) scaleX(-1); }
-  100% { transform: translateX(calc(100% + 60px)) translateY(0) scaleX(-1); }
+  0% { left: -10%; transform: translateY(0) scaleX(1); }
+  40% { left: 40%; transform: translateY(-20px) scaleX(1); }
+  50% { left: 50%; transform: translateY(8px) scaleX(-1); }
+  90% { left: 90%; transform: translateY(-12px) scaleX(-1); }
+  100% { left: 110%; transform: translateY(0) scaleX(-1); }
 }
 
 .fs-ripples {
@@ -2870,21 +2870,21 @@ body {
 
 /* 鱼游动速度 - 稀有度越高速越快 */
 .fs-swimming-fish.rarity-common {
-  animation-duration: 14s !important;
+  animation-duration: 12s !important;
 }
 .fs-swimming-fish.rarity-rare {
-  animation-duration: 9s !important;
+  animation-duration: 8s !important;
 }
 .fs-swimming-fish.rarity-epic {
-  animation-duration: 6s !important;
+  animation-duration: 5s !important;
 }
 .fs-swimming-fish.rarity-legendary {
-  animation-duration: 4s !important;
-  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.8));
+  animation-duration: 3.5s !important;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.9)) !important;
 }
 .fs-swimming-fish.rarity-junk {
-  animation-duration: 16s !important;
-  opacity: 0.5;
+  animation-duration: 15s !important;
+  opacity: 0.5 !important;
 }
 
 .fs-ui {
