@@ -1671,15 +1671,35 @@ function startFishSwimming() {
   const container = document.getElementById('fsFishSwimming');
   container.innerHTML = '';
   
-  const fishEmojis = ['🐟', '🐠', '🐡', '🦈', '🐬', '🐋', '🐳', '🦑'];
+  // 稀有度配置：每种稀有度对应的鱼emoji和速度
+  const fishConfig = [
+    { rarity: 'junk', emojis: ['👢', '🍾', '👒', '🪙'], weight: 0.05 },
+    { rarity: 'common', emojis: ['🐟', '🐠', '🐡', '🐍'], weight: 0.55 },
+    { rarity: 'rare', emojis: ['🐟', '🐠'], weight: 0.25 },
+    { rarity: 'epic', emojis: ['🐉', '🐠', '🐟'], weight: 0.12 },
+    { rarity: 'legendary', emojis: ['🐲', '🧜', '🐋'], weight: 0.03 }
+  ];
+  
+  function pickRarity() {
+    const r = Math.random();
+    let cumulative = 0;
+    for (const cfg of fishConfig) {
+      cumulative += cfg.weight;
+      if (r < cumulative) return cfg;
+    }
+    return fishConfig[1];
+  }
+  
   for (let i = 0; i < 8; i++) {
+    const cfg = pickRarity();
     const fish = document.createElement('div');
-    fish.className = 'fs-swimming-fish';
-    fish.textContent = fishEmojis[Math.floor(Math.random() * fishEmojis.length)];
+    fish.className = `fs-swimming-fish rarity-${cfg.rarity}`;
+    fish.textContent = cfg.emojis[Math.floor(Math.random() * cfg.emojis.length)];
     fish.style.top = (10 + Math.random() * 70) + '%';
-    fish.style.animationDuration = (6 + Math.random() * 8) + 's';
+    fish.style.animationDuration = (4 + Math.random() * 12) + 's';
     fish.style.animationDelay = (Math.random() * -10) + 's';
-    fish.style.fontSize = (20 + Math.random() * 24) + 'px';
+    fish.style.fontSize = cfg.rarity === 'legendary' ? (28 + Math.random() * 12) + 'px' : (20 + Math.random() * 18) + 'px';
+    fish.dataset.rarity = cfg.rarity;
     container.appendChild(fish);
   }
 }
@@ -1688,24 +1708,181 @@ function stopFishSwimming() {
   document.getElementById('fsFishSwimming').innerHTML = '';
 }
 
+// 钓鱼状态
+let fsCastState = 'idle'; // idle | casting | waiting | biting | reeling | done
+let fsCheckFishInterval = null;
+let fsCastTimeout = null;
+let fsMaxWaitTimer = null;
+
 function fsStartFishing() {
-  if (fsIsFishing || !socket) return;
-  fsIsFishing = true;
+  if (fsCastState !== 'idle' || !socket) return;
+  fsCastState = 'casting';
   
   const fishBtn = document.getElementById('fsFishBtn');
   const statusEl = document.getElementById('fsStatus');
+  const rodLine = document.getElementById('fsRodLine');
   const rodFloat = document.getElementById('fsRodFloat');
+  const fishBite = document.getElementById('fsFishBite');
   
   fishBtn.disabled = true;
-  fishBtn.textContent = '🎣 钓鱼中...';
-  statusEl.textContent = '等待上钩...';
+  fishBtn.textContent = '🎣 抛竿中...';
+  statusEl.textContent = '🎯 抛竿...';
   statusEl.style.color = '#F59E0B';
   
-  rodFloat.style.animation = 'fsFloatBob 1.5s ease-in-out infinite';
+  // 鱼钩归位（清除上一次的状态）
+  fishBite.classList.remove('biting');
+  fishBite.textContent = '';
+  
+  // 鱼线抛出动画
+  setTimeout(() => {
+    rodLine.classList.add('cast');
+    rodFloat.classList.add('cast');
+  }, 50);
   
   createRipple();
   
-  socket.emit('startFishing');
+  // 抛出完成，进入等待状态
+  fsCastTimeout = setTimeout(() => {
+    fsCastState = 'waiting';
+    statusEl.textContent = '🐟 等待鱼上钩...';
+    statusEl.style.color = '#3B82F6';
+    fishBtn.textContent = '🎣 收线';
+    fishBtn.disabled = false;
+    fishBtn.onclick = fsReelIn;
+    
+    // 鱼钩入水后开始检测鱼游过
+    fsCheckFishInterval = setInterval(fsCheckFishNearHook, 100);
+    
+    // 设置最大等待时间（30秒）
+    fsMaxWaitTimer = setTimeout(() => {
+      if (fsCastState === 'waiting') {
+        statusEl.textContent = '😴 没鱼上钩...';
+        statusEl.style.color = '#9CA3AF';
+        fsReelIn();
+      }
+    }, 30000);
+  }, 600);
+}
+
+// 检测鱼是否游到鱼钩附近
+function fsCheckFishNearHook() {
+  if (fsCastState !== 'waiting') return;
+  
+  const rodFloat = document.getElementById('fsRodFloat');
+  const floatRect = rodFloat.getBoundingClientRect();
+  const floatCenterX = floatRect.left + floatRect.width / 2;
+  const floatCenterY = floatRect.top + floatRect.height / 2;
+  
+  // 鱼钩捕获半径（根据稀有度调整）
+  // 普通鱼半径大，传说鱼半径小（更难勾中）
+  const catchRadius = 50;
+  
+  const fishes = document.querySelectorAll('.fs-swimming-fish');
+  for (const fish of fishes) {
+    const fishRect = fish.getBoundingClientRect();
+    if (fishRect.width === 0) continue;
+    const fishCenterX = fishRect.left + fishRect.width / 2;
+    const fishCenterY = fishRect.top + fishRect.height / 2;
+    
+    const dx = fishCenterX - floatCenterX;
+    const dy = fishCenterY - floatCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance < catchRadius + Math.random() * 20) {
+      // 鱼游到鱼钩附近
+      const rarity = fish.dataset.rarity || 'common';
+      // 传说级鱼需要更近距离才上钩
+      const requiredDistance = {
+        'junk': 80,
+        'common': 50,
+        'rare': 35,
+        'epic': 25,
+        'legendary': 18
+      }[rarity] || 50;
+      
+      if (distance < requiredDistance) {
+        fsFishBite(fish, rarity);
+        return;
+      }
+    }
+  }
+}
+
+// 鱼咬钩
+function fsFishBite(fishEl, rarity) {
+  if (fsCastState !== 'waiting') return;
+  fsCastState = 'biting';
+  
+  clearInterval(fsCheckFishInterval);
+  clearTimeout(fsMaxWaitTimer);
+  fsCheckFishInterval = null;
+  
+  const fishBite = document.getElementById('fsFishBite');
+  const statusEl = document.getElementById('fsStatus');
+  const fishBtn = document.getElementById('fsFishBtn');
+  
+  // 显示被勾中的鱼
+  fishBite.textContent = fishEl.textContent;
+  fishBite.classList.add('biting');
+  fishEl.style.opacity = '0.3';
+  
+  // 状态提示
+  const rarityNames = { common: '普通', rare: '稀有', epic: '史诗', legendary: '传说', junk: '杂物' };
+  const rarityColors = { common: '#9CA3AF', rare: '#3B82F6', epic: '#8B5CF6', legendary: '#F59E0B', junk: '#6B7280' };
+  statusEl.textContent = `✨ ${rarityNames[rarity]}鱼上钩了！快收线！`;
+  statusEl.style.color = rarityColors[rarity];
+  fishBtn.textContent = '⤴️ 收线中...';
+  fishBtn.disabled = true;
+  
+  // 1.4秒后自动收线（咬钩动画结束）
+  setTimeout(() => {
+    fsReelIn(rarity);
+  }, 1400);
+}
+
+// 收线
+function fsReelIn(caughtRarity = null) {
+  if (fsCastState === 'idle' || fsCastState === 'done' || fsCastState === 'reeling') return;
+  fsCastState = 'reeling';
+  
+  clearInterval(fsCheckFishInterval);
+  clearTimeout(fsMaxWaitTimer);
+  fsCheckFishInterval = null;
+  
+  const fishBtn = document.getElementById('fsFishBtn');
+  const statusEl = document.getElementById('fsStatus');
+  const rodLine = document.getElementById('fsRodLine');
+  const rodFloat = document.getElementById('fsRodFloat');
+  const fishBite = document.getElementById('fsFishBite');
+  
+  fishBtn.textContent = '🎣 收线中...';
+  fishBtn.disabled = true;
+  if (fishBtn.onclick) fishBtn.onclick = null;
+  statusEl.textContent = '⤴️ 收线中...';
+  
+  // 收线动画
+  rodLine.classList.remove('cast');
+  rodLine.classList.add('reeling');
+  rodFloat.classList.remove('cast');
+  rodFloat.classList.add('reeling');
+  
+  // 收线完成
+  setTimeout(() => {
+    rodLine.classList.remove('reeling');
+    rodFloat.classList.remove('reeling');
+    fishBite.classList.remove('biting');
+    fishBite.textContent = '';
+    
+    // 通知服务器此次钓鱼结果
+    if (caughtRarity && socket) {
+      socket.emit('startFishing', { expectedRarity: caughtRarity });
+    } else if (socket) {
+      // 没勾到鱼，调用服务器默认随机
+      socket.emit('startFishing');
+    }
+    
+    fsCastState = 'idle';
+  }, 800);
 }
 
 function createRipple() {
@@ -1720,6 +1897,7 @@ function createRipple() {
 
 function showFsFishCaughtResult(data) {
   fsIsFishing = false;
+  fsCastState = 'idle';
   
   const fishBtn = document.getElementById('fsFishBtn');
   const statusEl = document.getElementById('fsStatus');
@@ -1727,11 +1905,40 @@ function showFsFishCaughtResult(data) {
   const resultEl = document.getElementById('fsFishResult');
   const totalEl = document.getElementById('fsTotal');
   
+  // 恢复按钮为初始状态
   fishBtn.disabled = false;
-  fishBtn.textContent = '🎣 继续钓鱼';
-  statusEl.textContent = '收获满满！';
-  statusEl.style.color = '#10B981';
+  fishBtn.textContent = '🎣 抛竿钓鱼';
+  fishBtn.onclick = fsStartFishing;
   rodFloat.style.animation = '';
+  
+  // 处理鱼脱钩的特殊情况
+  if (data.escaped) {
+    const escapedMsg = document.createElement('div');
+    escapedMsg.className = 'fs-escape-toast';
+    escapedMsg.innerHTML = `😱 ${data.expectedRarity === 'legendary' ? '传说' : data.expectedRarity === 'epic' ? '史诗' : '稀有'}鱼脱钩了！`;
+    escapedMsg.style.cssText = `
+      position: fixed;
+      top: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(239, 68, 68, 0.95);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 18px;
+      font-weight: 600;
+      z-index: 3001;
+      animation: fsEscapeToast 2s ease-out forwards;
+    `;
+    document.body.appendChild(escapedMsg);
+    setTimeout(() => escapedMsg.remove(), 2100);
+    
+    statusEl.textContent = '😱 鱼脱钩了！';
+    statusEl.style.color = '#EF4444';
+  } else {
+    statusEl.textContent = '收获满满！';
+    statusEl.style.color = '#10B981';
+  }
   
   if (data.backpack) {
     totalEl.textContent = data.backpack.totalCaught || 0;
@@ -1748,7 +1955,7 @@ function showFsFishCaughtResult(data) {
   void resultEl.querySelector('.fs-fish-result-inner').offsetWidth;
   resultEl.querySelector('.fs-fish-result-inner').style.animation = 'fsFishPopIn 0.6s ease-out';
   
-  if (data.rarity === 'legendary') {
+  if (data.rarity === 'legendary' && !data.escaped) {
     triggerEmojiRain('恭喜');
   }
   

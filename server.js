@@ -813,7 +813,7 @@ io.on('connection', (socket) => {
     saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
   });
 
-  socket.on('startFishing', () => {
+  socket.on('startFishing', (data) => {
     const roomId = socket.roomId;
     if (!roomId) return;
     const room = rooms.get(roomId);
@@ -826,14 +826,59 @@ io.on('connection', (socket) => {
       room.gameData.backpacks[username] = { fishes: {}, totalCaught: 0 };
     }
 
-    const rand = Math.random();
-    let cumulative = 0;
+    // 客户端传入了预期稀有度（鱼已经游到鱼钩附近被勾中）
+    // 按预期稀有度出鱼，但越稀有的有概率钓空（鱼脱钩）
+    const expectedRarity = data && data.expectedRarity;
     let caughtRarity = 'junk';
-    for (const [rarity, data] of Object.entries(FISH_RARITY)) {
-      cumulative += data.chance;
-      if (rand < cumulative) {
-        caughtRarity = rarity;
-        break;
+    
+    if (expectedRarity && FISH_DATA[expectedRarity]) {
+      // 鱼脱钩概率：越稀有越容易脱钩
+      const escapeRate = {
+        'junk': 0,
+        'common': 0.15,
+        'rare': 0.35,
+        'epic': 0.55,
+        'legendary': 0.75
+      }[expectedRarity] || 0.15;
+      
+      if (Math.random() < escapeRate) {
+        // 鱼脱钩了！按低一档稀有度给个"安慰奖"
+        const downgradeMap = {
+          'legendary': 'epic',
+          'epic': 'rare',
+          'rare': 'common',
+          'common': 'junk',
+          'junk': 'junk'
+        };
+        caughtRarity = downgradeMap[expectedRarity] || 'junk';
+        const fishPool = FISH_DATA[caughtRarity];
+        const fish = fishPool[Math.floor(Math.random() * fishPool.length)];
+        const rarityInfo = FISH_RARITY[caughtRarity];
+        const bp = room.gameData.backpacks[username];
+        bp.fishes[fish.name] = (bp.fishes[fish.name] || 0) + 1;
+        bp.totalCaught++;
+        socket.emit('fishCaught', {
+          fish: fish,
+          rarity: caughtRarity,
+          rarityInfo: rarityInfo,
+          backpack: bp,
+          escaped: true,
+          expectedRarity: expectedRarity
+        });
+        saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, gameData: room.gameData });
+        return;
+      }
+      caughtRarity = expectedRarity;
+    } else {
+      // 没有咬钩，纯随机出鱼
+      const rand = Math.random();
+      let cumulative = 0;
+      for (const [rarity, data] of Object.entries(FISH_RARITY)) {
+        cumulative += data.chance;
+        if (rand < cumulative) {
+          caughtRarity = rarity;
+          break;
+        }
       }
     }
 
