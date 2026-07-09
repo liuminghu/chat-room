@@ -2083,3 +2083,478 @@ body {
     opacity: 1;
   }
 }
+
+.game-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.game-modal-content {
+  position: relative;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: gameModalIn 0.3s ease-out;
+}
+
+@keyframes gameModalIn {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.game-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.game-close-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.game-title {
+  text-align: center;
+  margin: 0 0 16px 0;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.game-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.game-tab {
+  flex: 1;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.game-tab.active {
+  background: var(--accent-color);
+  color: white;
+  font-weight: 600;
+}
+
+.game-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.game-tab-panel {
+  animation: fadeSlideIn 0.3s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.game-hall-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.hall-game-card {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 20px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+}
+
+.hall-game-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-color);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
+}
+
+.hall-game-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.hall-game-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.hall-game-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.hall-game-btn {
+  display: inline-block;
+  padding: 6px 16px;
+  background: var(--accent-color);
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fishing-scene {
+  position: relative;
+}
+
+.fishing-water {
+  position: relative;
+  height: 240px;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.fishing-sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  background: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 100%);
+}
+
+.fishing-waves {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  background: linear-gradient(180deg, #4FC3F7 0%, #0288D1 100%);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: -50%;
+  width: 200%;
+  height: 100%;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M0,60 C200,100 400,20 600,80 800,40 1000,90 1200,50 1200,120 0,120Z' fill='rgba(255,255,255,0.2)'/%3E%3C/svg%3E");
+  background-size: 600px 100%;
+  animation: waveMove 4s linear infinite;
+}
+
+.wave1 { opacity: 0.6; animation-duration: 8s; }
+.wave2 { opacity: 0.4; animation-duration: 6s; animation-delay: -2s; }
+.wave3 { opacity: 0.3; animation-duration: 10s; animation-delay: -4s; }
+
+@keyframes waveMove {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
+}
+
+.fishing-rod {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.rod-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 120px;
+  background: linear-gradient(180deg, #8B4513 0%, #654321 100%);
+  transform: translateX(-50%);
+}
+
+.rod-float {
+  position: absolute;
+  left: 50%;
+  top: 115px;
+  font-size: 24px;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+@keyframes floatBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-8px); }
+}
+
+.fishing-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.fishing-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.fish-btn {
+  padding: 12px 28px;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.fish-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.fish-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fish-result {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.fish-result-inner {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 24px 32px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  min-width: 160px;
+}
+
+.fish-result-emoji {
+  font-size: 64px;
+  margin-bottom: 8px;
+  animation: fishJump 0.5s ease-out;
+}
+
+@keyframes fishJump {
+  0% { transform: scale(0) rotate(-20deg); }
+  60% { transform: scale(1.2) rotate(10deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.fish-result-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.fish-result-rarity {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.fish-result-points {
+  font-size: 14px;
+  color: #10B981;
+  font-weight: 600;
+}
+
+@keyframes fishPopIn {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.backpack-header {
+  margin-bottom: 12px;
+}
+
+.backpack-stats {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.backpack-stats b {
+  color: var(--accent-color);
+  font-size: 16px;
+}
+
+.backpack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.backpack-item {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.backpack-item:hover:not(.locked) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.backpack-item.locked {
+  opacity: 0.4;
+  cursor: default;
+  filter: grayscale(1);
+}
+
+.bp-item-emoji {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+
+.bp-item-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.bp-item-rarity {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.bp-item-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.bp-item-points {
+  font-size: 10px;
+  color: #10B981;
+  margin-top: 2px;
+}
+
+.backpack-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.backpack-tip {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+  .game-modal-content {
+    width: 95%;
+    max-height: 90vh;
+    padding: 20px 16px;
+    border-radius: 16px;
+  }
+  
+  .game-hall-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .hall-game-card {
+    padding: 16px 12px;
+  }
+  
+  .hall-game-icon {
+    font-size: 40px;
+  }
+  
+  .backpack-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+}

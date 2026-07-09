@@ -326,6 +326,24 @@ function connectSocket() {
     
     showToast('消息记录已被清空', 'success');
   });
+
+  socket.on('fishCaught', (data) => {
+    showFishCaughtResult(data);
+  });
+
+  socket.on('backpackData', (data) => {
+    renderBackpack(data);
+  });
+
+  socket.on('sellResult', (data) => {
+    if (data.success) {
+      showToast(data.message, 'success');
+      renderBackpack(data.backpack);
+      updateBackpackPoints(data.points);
+    } else {
+      showToast(data.message, 'error');
+    }
+  });
 }
 
 function updateAnnouncementBar(text) {
@@ -1378,6 +1396,163 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+let isFishing = false;
+
+function openGameCenter() {
+  document.getElementById('gameCenterModal').classList.remove('hidden');
+  document.getElementById('plusPanel').classList.add('hidden');
+  if (socket) socket.emit('getBackpack');
+}
+
+function closeGameCenter() {
+  document.getElementById('gameCenterModal').classList.add('hidden');
+}
+
+function switchGameTab(tab) {
+  document.querySelectorAll('.game-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.game-tab[data-tab="${tab}"]`).classList.add('active');
+  document.querySelectorAll('.game-tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('game' + tab.charAt(0).toUpperCase() + tab.slice(1) + 'Tab').classList.remove('hidden');
+  
+  if (tab === 'backpack' && socket) {
+    socket.emit('getBackpack');
+  }
+}
+
+function startFishing() {
+  if (isFishing || !socket) return;
+  isFishing = true;
+  
+  const fishBtn = document.getElementById('fishBtn');
+  const statusEl = document.getElementById('fishingStatus');
+  const rodFloat = document.getElementById('rodFloat');
+  
+  fishBtn.disabled = true;
+  fishBtn.textContent = '🎣 钓鱼中...';
+  statusEl.textContent = '等待上钩...';
+  
+  rodFloat.style.animation = 'floatBob 1.5s ease-in-out infinite';
+  
+  socket.emit('startFishing');
+}
+
+function showFishCaughtResult(data) {
+  isFishing = false;
+  
+  const fishBtn = document.getElementById('fishBtn');
+  const statusEl = document.getElementById('fishingStatus');
+  const rodFloat = document.getElementById('rodFloat');
+  const resultEl = document.getElementById('fishResult');
+  const totalEl = document.getElementById('fishingTotal');
+  
+  fishBtn.disabled = false;
+  fishBtn.textContent = '🎣 继续钓鱼';
+  statusEl.textContent = '收获满满！';
+  rodFloat.style.animation = '';
+  
+  if (data.backpack) {
+    totalEl.textContent = data.backpack.totalCaught || 0;
+  }
+  
+  document.getElementById('fishResultEmoji').textContent = data.fish.emoji;
+  document.getElementById('fishResultName').textContent = data.fish.name;
+  document.getElementById('fishResultRarity').textContent = data.rarityInfo.name;
+  document.getElementById('fishResultRarity').style.color = data.rarityInfo.color;
+  document.getElementById('fishResultPoints').textContent = `+${data.fish.points} 积分`;
+  
+  resultEl.classList.remove('hidden');
+  resultEl.querySelector('.fish-result-inner').style.animation = 'none';
+  void resultEl.querySelector('.fish-result-inner').offsetWidth;
+  resultEl.querySelector('.fish-result-inner').style.animation = 'fishPopIn 0.6s ease-out';
+  
+  if (data.rarity === 'legendary') {
+    triggerEmojiRain('恭喜');
+  }
+  
+  setTimeout(() => {
+    resultEl.classList.add('hidden');
+  }, 2500);
+}
+
+function renderBackpack(data) {
+  const grid = document.getElementById('backpackGrid');
+  const totalEl = document.getElementById('bpTotal');
+  
+  if (!data || !data.fishes || Object.keys(data.fishes).length === 0) {
+    grid.innerHTML = '<div class="backpack-empty">还没有钓到鱼，快去钓鱼吧！</div>';
+    totalEl.textContent = data?.totalCaught || 0;
+    return;
+  }
+  
+  totalEl.textContent = data.totalCaught || 0;
+  
+  const fishList = [
+    { name: '黄金龙', emoji: '🐲', rarity: 'legendary', points: 200 },
+    { name: '美人鱼', emoji: '🧜', rarity: 'legendary', points: 150 },
+    { name: '鲲', emoji: '🐋', rarity: 'legendary', points: 300 },
+    { name: '金龙鱼', emoji: '🐉', rarity: 'epic', points: 50 },
+    { name: '胭脂鱼', emoji: '🐠', rarity: 'epic', points: 40 },
+    { name: '中华鲟', emoji: '🐟', rarity: 'epic', points: 60 },
+    { name: '鲈鱼', emoji: '🐟', rarity: 'rare', points: 15 },
+    { name: '鲑鱼', emoji: '🐠', rarity: 'rare', points: 18 },
+    { name: '鳜鱼', emoji: '🐟', rarity: 'rare', points: 20 },
+    { name: '黑鱼', emoji: '🐟', rarity: 'rare', points: 15 },
+    { name: '小鲫鱼', emoji: '🐟', rarity: 'common', points: 2 },
+    { name: '鲤鱼', emoji: '🐠', rarity: 'common', points: 3 },
+    { name: '草鱼', emoji: '🐟', rarity: 'common', points: 3 },
+    { name: '小杂鱼', emoji: '🐡', rarity: 'common', points: 1 },
+    { name: '泥鳅', emoji: '🐍', rarity: 'common', points: 2 },
+    { name: '生锈硬币', emoji: '🪙', rarity: 'junk', points: 5 },
+    { name: '破靴子', emoji: '👢', rarity: 'junk', points: 0 },
+    { name: '空瓶子', emoji: '🍾', rarity: 'junk', points: 0 },
+    { name: '旧草帽', emoji: '👒', rarity: 'junk', points: 0 }
+  ];
+  
+  const rarityColors = {
+    legendary: '#F59E0B',
+    epic: '#8B5CF6',
+    rare: '#3B82F6',
+    common: '#9CA3AF',
+    junk: '#6B7280'
+  };
+  
+  const rarityNames = {
+    legendary: '传说',
+    epic: '史诗',
+    rare: '稀有',
+    common: '普通',
+    junk: '杂物'
+  };
+  
+  grid.innerHTML = '';
+  for (const fish of fishList) {
+    const count = data.fishes[fish.name] || 0;
+    const item = document.createElement('div');
+    item.className = `backpack-item ${count > 0 ? '' : 'locked'}`;
+    item.style.borderColor = rarityColors[fish.rarity];
+    item.innerHTML = `
+      <div class="bp-item-emoji">${fish.emoji}</div>
+      <div class="bp-item-name">${fish.name}</div>
+      <div class="bp-item-rarity" style="color: ${rarityColors[fish.rarity]}">${rarityNames[fish.rarity]}</div>
+      <div class="bp-item-count">${count > 0 ? `x${count}` : '未获得'}</div>
+      <div class="bp-item-points">${fish.points}分/条</div>
+    `;
+    if (count > 0) {
+      item.addEventListener('click', () => {
+        if (confirm(`确定卖出 1 条${fish.name}？可获得 ${fish.points} 积分`)) {
+          socket.emit('sellFish', { fishName: fish.name });
+        }
+      });
+    }
+    grid.appendChild(item);
+  }
+}
+
+function updateBackpackPoints(points) {
+  const el = document.getElementById('bpPoints');
+  if (el) el.textContent = points || 0;
+}
+
 document.getElementById('joinBtn').addEventListener('click', () => joinChat());
 document.getElementById('refreshNameBtn').addEventListener('click', () => {
   document.getElementById('usernameInput').value = generateRandomNickname();
@@ -1389,6 +1564,31 @@ document.getElementById('usernameInput').addEventListener('keypress', (e) => {
 document.getElementById('roomIdInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
 });
+
+document.getElementById('gameCenterBtn').addEventListener('click', openGameCenter);
+document.getElementById('gameCenterCloseBtn').addEventListener('click', closeGameCenter);
+document.querySelector('#gameCenterModal .game-modal-overlay').addEventListener('click', closeGameCenter);
+
+document.querySelectorAll('.game-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchGameTab(tab.dataset.tab));
+});
+
+document.querySelectorAll('.hall-game-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const game = card.dataset.game;
+    if (game === 'fishing') {
+      switchGameTab('fishing');
+    } else if (game === 'dice') {
+      closeGameCenter();
+      rollDice();
+    } else if (game === 'rps') {
+      closeGameCenter();
+      playRockPaperScissors();
+    }
+  });
+});
+
+document.getElementById('fishBtn').addEventListener('click', startFishing);
 
 const messageInput = document.getElementById('messageInput');
 messageInput.addEventListener('input', handleMentionInput);

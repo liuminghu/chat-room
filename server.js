@@ -36,6 +36,46 @@ const BOT_RATE_LIMIT = 10;
 const BOT_RATE_LIMIT_WINDOW = 60000;
 const BOT_DAILY_LIMIT = 50;
 
+const FISH_DATA = {
+  common: [
+    { name: '小鲫鱼', emoji: '🐟', points: 2 },
+    { name: '鲤鱼', emoji: '🐠', points: 3 },
+    { name: '草鱼', emoji: '🐟', points: 3 },
+    { name: '小杂鱼', emoji: '🐡', points: 1 },
+    { name: '泥鳅', emoji: '🐍', points: 2 }
+  ],
+  rare: [
+    { name: '鲈鱼', emoji: '🐟', points: 15 },
+    { name: '鲑鱼', emoji: '🐠', points: 18 },
+    { name: '鳜鱼', emoji: '🐟', points: 20 },
+    { name: '黑鱼', emoji: '🐟', points: 15 }
+  ],
+  epic: [
+    { name: '金龙鱼', emoji: '🐉', points: 50 },
+    { name: '胭脂鱼', emoji: '🐠', points: 40 },
+    { name: '中华鲟', emoji: '🐟', points: 60 }
+  ],
+  legendary: [
+    { name: '黄金龙', emoji: '🐲', points: 200 },
+    { name: '美人鱼', emoji: '🧜', points: 150 },
+    { name: '鲲', emoji: '🐋', points: 300 }
+  ],
+  junk: [
+    { name: '破靴子', emoji: '👢', points: 0 },
+    { name: '空瓶子', emoji: '🍾', points: 0 },
+    { name: '旧草帽', emoji: '👒', points: 0 },
+    { name: '生锈硬币', emoji: '🪙', points: 5 }
+  ]
+};
+
+const FISH_RARITY = {
+  common: { name: '普通', color: '#9CA3AF', chance: 0.55 },
+  rare: { name: '稀有', color: '#3B82F6', chance: 0.25 },
+  epic: { name: '史诗', color: '#8B5CF6', chance: 0.12 },
+  legendary: { name: '传说', color: '#F59E0B', chance: 0.03 },
+  junk: { name: '杂物', color: '#6B7280', chance: 0.05 }
+};
+
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -320,10 +360,15 @@ async function checkBotRateLimit(userId, roomId) {
 
 const DEFAULT_ANNOUNCEMENT = `欢迎来到聊天室！🤖 小助手可以帮你做这些事情：
 
+🎮 游戏专区
+• 点击底部 🎮 按钮进入游戏大厅
+• 🎣 钓鱼大师 - 休闲钓鱼，收集稀有鱼类
+• 🎲 幸运骰子 - 掷出好运
+• ✊ 石头剪刀布 - 经典对战
+
 🎮 趣味游戏
 • \`/猜谜\` - 来玩猜谜语吧
 • \`/成语接龙\` - 成语接龙挑战
-• 点击 ➕ → 游戏 → 🎲掷骰子/✊石头剪刀布
 
 ✨ 表情雨
 • 发送「生日快乐」「恭喜」「666」等关键词触发表情雨
@@ -386,7 +431,8 @@ async function getOrLoadRoom(roomId) {
       announcement: metadata?.announcement || DEFAULT_ANNOUNCEMENT,
       signins: metadata?.signins || {},
       poll: metadata?.poll || {},
-      botGame: metadata?.botGame || {}
+      botGame: metadata?.botGame || {},
+      gameData: metadata?.gameData || {}
     };
     rooms.set(roomId, room);
     roomLoadPromises.delete(roomId);
@@ -711,6 +757,123 @@ io.on('connection', (socket) => {
     saveMessageToFirebase(roomId, pollMsg);
     io.to(roomId).emit('message', pollMsg);
     saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
+  });
+
+  socket.on('startFishing', () => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const username = socket.username || '匿名';
+
+    if (!room.gameData) room.gameData = {};
+    if (!room.gameData.backpacks) room.gameData.backpacks = {};
+    if (!room.gameData.backpacks[username]) {
+      room.gameData.backpacks[username] = { fishes: {}, totalCaught: 0 };
+    }
+
+    const rand = Math.random();
+    let cumulative = 0;
+    let caughtRarity = 'junk';
+    for (const [rarity, data] of Object.entries(FISH_RARITY)) {
+      cumulative += data.chance;
+      if (rand < cumulative) {
+        caughtRarity = rarity;
+        break;
+      }
+    }
+
+    const fishPool = FISH_DATA[caughtRarity];
+    const fish = fishPool[Math.floor(Math.random() * fishPool.length)];
+    const rarityInfo = FISH_RARITY[caughtRarity];
+
+    const bp = room.gameData.backpacks[username];
+    bp.fishes[fish.name] = (bp.fishes[fish.name] || 0) + 1;
+    bp.totalCaught++;
+
+    socket.emit('fishCaught', {
+      fish: fish,
+      rarity: caughtRarity,
+      rarityInfo: rarityInfo,
+      backpack: bp
+    });
+
+    if (caughtRarity === 'legendary' || caughtRarity === 'epic') {
+      const systemMsg = {
+        id: Date.now() + Math.random(),
+        type: 'system',
+        text: `🎉 恭喜 ${username} 钓到了${rarityInfo.name}品质的【${fish.name}】${fish.emoji}！`,
+        timestamp: Date.now()
+      };
+      room.messages.push(systemMsg);
+      if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+      io.to(roomId).emit('message', systemMsg);
+    }
+
+    saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, gameData: room.gameData });
+  });
+
+  socket.on('getBackpack', () => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const username = socket.username || '匿名';
+
+    if (!room.gameData || !room.gameData.backpacks || !room.gameData.backpacks[username]) {
+      socket.emit('backpackData', { fishes: {}, totalCaught: 0 });
+      return;
+    }
+
+    socket.emit('backpackData', room.gameData.backpacks[username]);
+  });
+
+  socket.on('sellFish', ({ fishName }) => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const username = socket.username || '匿名';
+
+    if (!room.gameData || !room.gameData.backpacks || !room.gameData.backpacks[username]) {
+      socket.emit('sellResult', { success: false, message: '背包为空' });
+      return;
+    }
+
+    const bp = room.gameData.backpacks[username];
+    if (!bp.fishes[fishName] || bp.fishes[fishName] <= 0) {
+      socket.emit('sellResult', { success: false, message: '没有这种鱼' });
+      return;
+    }
+
+    let fishInfo = null;
+    for (const fishes of Object.values(FISH_DATA)) {
+      const found = fishes.find(f => f.name === fishName);
+      if (found) { fishInfo = found; break; }
+    }
+
+    if (!fishInfo) {
+      socket.emit('sellResult', { success: false, message: '未知鱼类' });
+      return;
+    }
+
+    bp.fishes[fishName]--;
+    if (bp.fishes[fishName] <= 0) delete bp.fishes[fishName];
+
+    if (!room.signins) room.signins = {};
+    if (!room.signins[username]) room.signins[username] = { date: '', streak: 0, points: 0 };
+    if (!room.signins[username].points) room.signins[username].points = 0;
+    room.signins[username].points += fishInfo.points;
+
+    socket.emit('sellResult', {
+      success: true,
+      message: `卖出 ${fishInfo.name} 获得 ${fishInfo.points} 积分`,
+      points: room.signins[username].points,
+      fish: fishInfo,
+      backpack: bp
+    });
+
+    saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame, gameData: room.gameData });
   });
 
   socket.on('loadMoreHistory', async ({ beforeTimestamp }) => {

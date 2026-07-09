@@ -64,6 +64,7 @@
         </div>
         
         <div class="input-area">
+          <button id="gameCenterBtn" class="emoji-toggle" title="游戏专区">🎮</button>
           <button id="plusBtn" class="emoji-toggle" title="更多">➕</button>
           <div class="input-wrapper">
             <div id="replyPreview" class="reply-preview hidden">
@@ -204,6 +205,93 @@
       <div class="share-actions">
         <button id="cancelSwitchRoomBtn" class="share-btn-secondary">取消</button>
         <button id="confirmSwitchRoomBtn" class="share-btn-primary">切换</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameCenterModal" class="game-modal hidden">
+    <div class="game-modal-overlay"></div>
+    <div class="game-modal-content">
+      <button class="game-close-btn" id="gameCenterCloseBtn">&times;</button>
+      <h3 class="game-title">🎮 游戏专区</h3>
+      <div class="game-tabs">
+        <div class="game-tab active" data-tab="hall">🏠 大厅</div>
+        <div class="game-tab" data-tab="fishing">🎣 钓鱼</div>
+        <div class="game-tab" data-tab="backpack">🎒 背包</div>
+      </div>
+      <div class="game-tab-content">
+        <div id="gameHallTab" class="game-tab-panel">
+          <div class="game-hall-grid">
+            <div class="hall-game-card" data-game="fishing">
+              <div class="hall-game-icon">🎣</div>
+              <div class="hall-game-name">钓鱼大师</div>
+              <div class="hall-game-desc">休闲钓鱼，收集稀有鱼类</div>
+              <div class="hall-game-btn">开始游戏</div>
+            </div>
+            <div class="hall-game-card" data-game="dice">
+              <div class="hall-game-icon">🎲</div>
+              <div class="hall-game-name">幸运骰子</div>
+              <div class="hall-game-desc">掷出好运，惊喜连连</div>
+              <div class="hall-game-btn">开始游戏</div>
+            </div>
+            <div class="hall-game-card" data-game="rps">
+              <div class="hall-game-icon">✊</div>
+              <div class="hall-game-name">石头剪刀布</div>
+              <div class="hall-game-desc">经典对战，谁是赢家</div>
+              <div class="hall-game-btn">开始游戏</div>
+            </div>
+          </div>
+        </div>
+        <div id="gameFishingTab" class="game-tab-panel hidden">
+          <div class="fishing-scene">
+            <div class="fishing-water">
+              <div class="fishing-sky"></div>
+              <div class="fishing-waves">
+                <div class="wave wave1"></div>
+                <div class="wave wave2"></div>
+                <div class="wave wave3"></div>
+              </div>
+              <div class="fishing-rod" id="fishingRod">
+                <div class="rod-line" id="rodLine"></div>
+                <div class="rod-float" id="rodFloat">🎣</div>
+              </div>
+              <div class="fishing-fishes" id="fishingFishes"></div>
+            </div>
+            <div class="fishing-info">
+              <div class="fishing-stats">
+                <div class="stat-item">
+                  <span class="stat-label">总收获</span>
+                  <span class="stat-value" id="fishingTotal">0</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">状态</span>
+                  <span class="stat-value" id="fishingStatus">准备就绪</span>
+                </div>
+              </div>
+              <button id="fishBtn" class="fish-btn">🎣 抛竿钓鱼</button>
+            </div>
+            <div class="fish-result hidden" id="fishResult">
+              <div class="fish-result-inner">
+                <div class="fish-result-emoji" id="fishResultEmoji">🐟</div>
+                <div class="fish-result-name" id="fishResultName">小鲫鱼</div>
+                <div class="fish-result-rarity" id="fishResultRarity">普通</div>
+                <div class="fish-result-points" id="fishResultPoints">+2 积分</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="gameBackpackTab" class="game-tab-panel hidden">
+          <div class="backpack-header">
+            <div class="backpack-stats">
+              <span>🎒 总钓鱼数: <b id="bpTotal">0</b></span>
+              <span>💰 积分: <b id="bpPoints">0</b></span>
+            </div>
+          </div>
+          <div class="backpack-grid" id="backpackGrid">
+            <div class="backpack-empty">还没有钓到鱼，快去钓鱼吧！</div>
+          </div>
+          <div class="backpack-tip">提示：点击鱼类可以卖出换取积分</div>
+        </div>
       </div>
     </div>
   </div>
