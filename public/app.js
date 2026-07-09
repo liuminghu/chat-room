@@ -1656,7 +1656,7 @@ document.querySelectorAll('.hall-game-card').forEach(card => {
     const game = card.dataset.game;
     if (game === 'fishing') {
       closeGameCenter();
-      openFullscreenFishing();
+      window.location.href = '/fishing';
     } else if (game === 'dice') {
       closeGameCenter();
       rollDice();

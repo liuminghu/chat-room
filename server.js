@@ -25,6 +25,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public', { extensions: ['html'] }));
 
+// 独立的钓鱼页面
+app.get('/fishing', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'fishing.html'));
+});
+
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
@@ -362,7 +367,7 @@ const DEFAULT_ANNOUNCEMENT = `欢迎来到聊天室！🤖 小助手可以帮你
 
 🎮 游戏专区
 • 点击底部 🎮 按钮进入游戏大厅
-• 🎣 钓鱼大师 - 休闲钓鱼，收集稀有鱼类
+• 🎣 钓鱼大师 - 黄金矿工式钓鱼，访问 \`/fishing\` 进入独立页面
 • 🎲 幸运骰子 - 掷出好运
 • ✊ 石头剪刀布 - 经典对战
 
@@ -811,6 +816,21 @@ io.on('connection', (socket) => {
     saveMessageToFirebase(roomId, pollMsg);
     io.to(roomId).emit('message', pollMsg);
     saveRoomMetadata(roomId, { announcement: room.announcement, signins: room.signins, poll: room.poll, botGame: room.botGame });
+  });
+
+  socket.on('getFishingBackpack', (data) => {
+    const roomId = (data && data.roomId) || socket.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const username = socket.username || '匿名';
+
+    if (!room.gameData || !room.gameData.backpacks || !room.gameData.backpacks[username]) {
+      socket.emit('fishingBackpack', { backpack: { fishes: {}, totalCaught: 0 } });
+      return;
+    }
+
+    socket.emit('fishingBackpack', { backpack: room.gameData.backpacks[username] });
   });
 
   socket.on('startFishing', (data) => {

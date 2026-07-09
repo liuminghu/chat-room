@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>钓鱼大师 - 聊天室</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+    /* 加载中样式 */
+    .fs-loading {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      background: linear-gradient(180deg, #87CEEB 0%, #4FC3F7 45%, #0288D1 45%, #01579B 100%);
+      color: #fff; z-index: 9999;
+    }
+    .fs-loading-spinner {
+      width: 60px; height: 60px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fs-loading-text { margin-top: 16px; font-size: 18px; font-weight: 500; }
+    .fs-error {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(239, 68, 68, 0.95); color: white; padding: 12px 24px;
+      border-radius: 24px; z-index: 10000; display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="fs-loading" id="fsLoading">
+    <div class="fs-loading-spinner"></div>
+    <div class="fs-loading-text">🎣 加载钓鱼大师...</div>
+  </div>
+  <div class="fs-error" id="fsError"></div>
+
+  <!-- 全屏钓鱼 -->
+  <div id="fullscreenFishing" class="fullscreen-fishing">
+    <div class="fs-fishing-scene">
+      <div class="fs-sky">
+        <div class="fs-sun">☀️</div>
+        <div class="fs-cloud fs-cloud1">☁️</div>
+        <div class="fs-cloud fs-cloud2">⛅</div>
+        <div class="fs-cloud fs-cloud3">☁️</div>
+      </div>
+      <div class="fs-dock">
+        <div class="fs-dock-plank"></div>
+        <div class="fs-dock-plank"></div>
+        <div class="fs-dock-plank"></div>
+      </div>
+      <div class="fs-water">
+        <div class="fs-waves">
+          <div class="fs-wave fs-wave1"></div>
+          <div class="fs-wave fs-wave2"></div>
+          <div class="fs-wave fs-wave3"></div>
+        </div>
+        <div class="fs-ripples" id="fsRipples"></div>
+      </div>
+      <!-- 静态鱼和物品（黄金矿工玩法） -->
+      <div class="fs-fish-container" id="fsFishContainer"></div>
+      <!-- 黄金矿工式钩子：从中心旋转摆动 -->
+      <div class="fs-hook-system" id="fsHookSystem">
+        <div class="fs-hook-pivot">⚓</div>
+        <div class="fs-hook-arm" id="fsHookArm">
+          <div class="fs-hook-rope"></div>
+          <div class="fs-hook-claw" id="fsHookClaw">
+            <span class="fs-hook-icon">🪝</span>
+          </div>
+        </div>
+        <div class="fs-caught-item" id="fsCaughtItem"></div>
+      </div>
+    </div>
+
+    <!-- 顶部状态栏 -->
+    <div class="fs-top-bar">
+      <button class="fs-back-btn" id="fsBackBtn">‹ 返回</button>
+      <div class="fs-stats">
+        <div class="fs-stat-item">
+          <span class="fs-stat-icon">🎣</span>
+          <div class="fs-stat-info">
+            <div class="fs-stat-label">总收获</div>
+            <div class="fs-stat-value" id="fsTotal">0</div>
+          </div>
+        </div>
+        <div class="fs-stat-item">
+          <span class="fs-stat-icon">💰</span>
+          <div class="fs-stat-info">
+            <div class="fs-stat-label">积分</div>
+            <div class="fs-stat-value" id="fsPoints">0</div>
+          </div>
+        </div>
+        <div class="fs-stat-item">
+          <span class="fs-stat-icon">⚡</span>
+          <div class="fs-stat-info">
+            <div class="fs-stat-label">状态</div>
+            <div class="fs-stat-value" id="fsStatus">准备就绪</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部控制 -->
+    <div class="fs-ui">
+      <button class="fs-backpack-btn" id="fsBackpackBtn">🎒 背包</button>
+      <div class="fs-center-info"></div>
+      <button class="fs-fish-btn" id="fsFishBtn">🎣 放钩子</button>
+    </div>
+
+    <!-- 钓鱼结果显示 -->
+    <div id="fsFishResult" class="fs-fish-result hidden">
+      <div class="fs-fish-result-inner">
+        <div class="fs-fish-emoji" id="fsFishEmoji">🐟</div>
+        <div class="fs-fish-name" id="fsFishName">小鱼</div>
+        <div class="fs-fish-rarity" id="fsFishRarity">普通</div>
+        <div class="fs-fish-points" id="fsFishPoints">+0 积分</div>
+      </div>
+    </div>
+
+    <!-- 背包模态框 -->
+    <div id="fsBackpackModal" class="fs-backpack-modal hidden">
+      <div class="fs-backpack-overlay"></div>
+      <div class="fs-backpack-content">
+        <button class="fs-backpack-close" id="fsBackpackCloseBtn">&times;</button>
+        <h3 class="fs-backpack-title">🎒 我的背包</h3>
+        <div class="fs-backpack-list" id="fsBackpackList"></div>
+        <div class="fs-backpack-total">
+          <span>总收获：</span>
+          <strong id="fsBackpackTotal">0</strong> 条
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/fs-app.js"></script>
+</body>
+</html>
