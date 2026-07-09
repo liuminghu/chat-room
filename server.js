@@ -432,7 +432,8 @@ async function getOrLoadRoom(roomId) {
       signins: metadata?.signins || {},
       poll: metadata?.poll || {},
       botGame: metadata?.botGame || {},
-      gameData: metadata?.gameData || {}
+      gameData: metadata?.gameData || {},
+      password: metadata?.password || null
     };
     rooms.set(roomId, room);
     roomLoadPromises.delete(roomId);
@@ -511,18 +512,17 @@ async function loadRoomMetadata(roomId) {
 io.on('connection', (socket) => {
   console.log('用户连接:', socket.id);
 
-  socket.on('join', async ({ roomId, username, userId }) => {
+  socket.on('join', async ({ roomId, username, userId, password, createWithPassword }) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
     const finalUsername = (username && username.trim()) || generateRandomNickname();
     const finalUserId = userId || socket.id;
+    const finalPassword = password || null;
 
-    // 如果是重连（同一用户重新 join），取消 disconnect 时的延迟离开广播
     if (socket.leaveTimer) {
       clearTimeout(socket.leaveTimer);
       socket.leaveTimer = null;
     }
 
-    // 离开之前加入的房间
     const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
     previousRooms.forEach(r => {
       const prevRoom = rooms.get(r);
@@ -534,7 +534,6 @@ io.on('connection', (socket) => {
         }
         const prevUserList = Array.from(new Set(prevRoom.users.values()));
         io.to(r).emit('userList', prevUserList);
-        // 不同房间切换时才广播离开消息
         if (prevName && r !== finalRoomId) {
           const leaveMsg = {
             id: Date.now() + Math.random(),
@@ -551,14 +550,50 @@ io.on('connection', (socket) => {
       socket.leave(r);
     });
 
-    const room = await getOrLoadRoom(finalRoomId);
+    let room = rooms.get(finalRoomId);
+    let isNewRoom = false;
+    
+    if (!room) {
+      if (roomLoadPromises.has(finalRoomId)) {
+        room = await roomLoadPromises.get(finalRoomId);
+      } else {
+        const history = await loadMessagesFromFirebase(finalRoomId, 100);
+        const metadata = await loadRoomMetadata(finalRoomId);
+        
+        room = {
+          messages: history,
+          users: new Map(),
+          loaded: true,
+          announcement: metadata?.announcement || DEFAULT_ANNOUNCEMENT,
+          signins: metadata?.signins || {},
+          poll: metadata?.poll || {},
+          botGame: metadata?.botGame || {},
+          gameData: metadata?.gameData || {},
+          password: metadata?.password || null
+        };
+        rooms.set(finalRoomId, room);
+        
+        if (createWithPassword && finalPassword) {
+          room.password = finalPassword;
+          saveRoomMetadata(finalRoomId, { ...metadata, password: finalPassword });
+        }
+        
+        isNewRoom = history.length === 0 && !metadata;
+      }
+    }
+
+    if (room.password && !createWithPassword) {
+      if (!finalPassword || finalPassword !== room.password) {
+        socket.emit('joinError', { error: 'wrong_password', message: '密码错误，请重新输入' });
+        return;
+      }
+    }
+
     if (!room.userIdMap) room.userIdMap = new Map();
 
-    // 判断是否重连（同一 userId 已有其他 socket 在线）
     const oldSocketId = room.userIdMap.get(finalUserId);
     const isReconnect = !!oldSocketId && oldSocketId !== socket.id;
 
-    // 重连时清理旧 socket 的用户记录
     if (isReconnect) {
       room.users.delete(oldSocketId);
     }
@@ -602,6 +637,23 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       });
     }
+  });
+
+  socket.on('checkRoomPassword', async ({ roomId }) => {
+    const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
+    
+    let room = rooms.get(finalRoomId);
+    if (!room) {
+      if (roomLoadPromises.has(finalRoomId)) {
+        room = await roomLoadPromises.get(finalRoomId);
+      } else {
+        const metadata = await loadRoomMetadata(finalRoomId);
+        socket.emit('roomPasswordChecked', { hasPassword: !!metadata?.password });
+        return;
+      }
+    }
+    
+    socket.emit('roomPasswordChecked', { hasPassword: !!room.password });
   });
 
   socket.on('message', async (data) => {

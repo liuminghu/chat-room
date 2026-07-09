@@ -347,6 +347,36 @@ function connectSocket() {
       showToast(data.message, 'error');
     }
   });
+
+  socket.on('joinError', (data) => {
+    if (data.error === 'wrong_password') {
+      showLoginScreen();
+      showToast(data.message, 'error');
+      const passwordInput = document.getElementById('roomPasswordInput');
+      passwordInput.value = '';
+      passwordInput.focus();
+      const passwordHint = document.getElementById('passwordHint');
+      passwordHint.style.display = 'block';
+    }
+  });
+
+  socket.on('roomPasswordChecked', (data) => {
+    const passwordSection = document.getElementById('passwordSection');
+    const passwordInput = document.getElementById('roomPasswordInput');
+    const passwordHint = document.getElementById('passwordHint');
+    const createPwdCheckbox = document.getElementById('createPasswordRoom');
+    
+    if (data.hasPassword) {
+      passwordSection.style.display = 'block';
+      passwordInput.required = true;
+      passwordInput.placeholder = '此房间需要密码';
+      passwordHint.style.display = 'block';
+      createPwdCheckbox.checked = false;
+      createPwdCheckbox.disabled = true;
+    } else {
+      passwordHint.style.display = 'none';
+    }
+  });
 }
 
 function updateAnnouncementBar(text) {
@@ -1567,6 +1597,34 @@ document.getElementById('usernameInput').addEventListener('keypress', (e) => {
 document.getElementById('roomIdInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') joinChat();
 });
+document.getElementById('roomIdInput').addEventListener('change', (e) => {
+  const roomId = e.target.value.trim();
+  const passwordSection = document.getElementById('passwordSection');
+  const createPwdCheckbox = document.getElementById('createPasswordRoom');
+  
+  if (roomId && socket) {
+    socket.emit('checkRoomPassword', { roomId });
+  }
+  
+  passwordSection.style.display = 'block';
+  createPwdCheckbox.disabled = false;
+});
+document.getElementById('createPasswordRoom').addEventListener('change', (e) => {
+  const passwordInput = document.getElementById('roomPasswordInput');
+  const passwordHint = document.getElementById('passwordHint');
+  
+  if (e.target.checked) {
+    passwordInput.required = true;
+    passwordInput.placeholder = '请设置房间密码';
+    passwordHint.textContent = '创建密码房，其他人需要输入密码才能进入';
+    passwordHint.style.display = 'block';
+  } else {
+    passwordInput.required = false;
+    passwordInput.placeholder = '房间密码（可选）';
+    passwordHint.textContent = '此房间需要密码';
+    passwordHint.style.display = 'none';
+  }
+});
 
 document.getElementById('gameCenterBtn').addEventListener('click', openGameCenter);
 document.getElementById('gameCenterCloseBtn').addEventListener('click', closeGameCenter);
@@ -1913,8 +1971,13 @@ function showChatScreen(name, roomId) {
 function joinChat(name, roomId) {
   const usernameInput = document.getElementById('usernameInput');
   const roomIdInput = document.getElementById('roomIdInput');
+  const passwordInput = document.getElementById('roomPasswordInput');
+  const createPwdCheckbox = document.getElementById('createPasswordRoom');
+  
   const nameToUse = (typeof name === 'string' && name) || usernameInput.value.trim();
   const roomIdToUse = (typeof roomId === 'string' && roomId) || roomIdInput.value.trim();
+  const password = passwordInput.value.trim();
+  const createWithPassword = createPwdCheckbox.checked;
 
   if (!nameToUse) {
     usernameInput.focus();
@@ -1940,7 +2003,13 @@ function joinChat(name, roomId) {
   hasMoreHistory = true;
   loadingHistory = false;
 
-  socket.emit('join', { roomId: roomIdToUse, username: nameToUse, userId });
+  socket.emit('join', { 
+    roomId: roomIdToUse, 
+    username: nameToUse, 
+    userId,
+    password,
+    createWithPassword
+  });
 
   document.getElementById('messageInput').focus();
 }
