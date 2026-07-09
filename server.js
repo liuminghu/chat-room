@@ -641,7 +641,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('checkRoomPassword', async ({ roomId }) => {
+  socket.on('checkRoomPassword', async ({ roomId, forSwitch }) => {
     const finalRoomId = (roomId && roomId.trim()) || DEFAULT_ROOM;
     
     let room = rooms.get(finalRoomId);
@@ -650,12 +650,12 @@ io.on('connection', (socket) => {
         room = await roomLoadPromises.get(finalRoomId);
       } else {
         const metadata = await loadRoomMetadata(finalRoomId);
-        socket.emit('roomPasswordChecked', { hasPassword: !!metadata?.password });
+        socket.emit('roomPasswordChecked', { hasPassword: !!metadata?.password, roomId: finalRoomId, forSwitch });
         return;
       }
     }
     
-    socket.emit('roomPasswordChecked', { hasPassword: !!room.password });
+    socket.emit('roomPasswordChecked', { hasPassword: !!room.password, roomId: finalRoomId, forSwitch });
   });
 
   socket.on('message', async (data) => {

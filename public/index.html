@@ -209,7 +209,11 @@
       <button id="switchRoomCloseBtn" class="share-close-btn">&times;</button>
       <h3 class="share-title">切换房间</h3>
       <input id="newRoomIdInput" type="text" class="edit-name-input" placeholder="输入新房间ID" maxlength="30">
-      <div class="edit-name-hint">输入房间ID即可切换到对应房间</div>
+      <div class="edit-name-hint" id="switchRoomHint">输入房间ID即可切换到对应房间</div>
+      <div class="password-section" id="switchRoomPasswordSection" style="display:none;">
+        <input type="password" id="switchRoomPassword" placeholder="房间密码（如果需要）" maxlength="20">
+        <div class="password-hint" id="switchRoomPasswordHint">此房间需要密码</div>
+      </div>
       <div class="share-actions">
         <button id="cancelSwitchRoomBtn" class="share-btn-secondary">取消</button>
         <button id="confirmSwitchRoomBtn" class="share-btn-primary">切换</button>

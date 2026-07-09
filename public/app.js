@@ -361,20 +361,37 @@ function connectSocket() {
   });
 
   socket.on('roomPasswordChecked', (data) => {
-    const passwordSection = document.getElementById('passwordSection');
-    const passwordInput = document.getElementById('roomPasswordInput');
-    const passwordHint = document.getElementById('passwordHint');
-    const createPwdCheckbox = document.getElementById('createPasswordRoom');
-    
-    if (data.hasPassword) {
-      passwordSection.style.display = 'block';
-      passwordInput.required = true;
-      passwordInput.placeholder = '此房间需要密码';
-      passwordHint.style.display = 'block';
-      createPwdCheckbox.checked = false;
-      createPwdCheckbox.disabled = true;
+    if (data.forSwitch) {
+      const passwordSection = document.getElementById('switchRoomPasswordSection');
+      const passwordInput = document.getElementById('switchRoomPassword');
+      const passwordHint = document.getElementById('switchRoomPasswordHint');
+      
+      if (data.hasPassword) {
+        passwordSection.style.display = 'block';
+        passwordInput.required = true;
+        passwordInput.placeholder = '此房间需要密码';
+        passwordHint.style.display = 'block';
+      } else {
+        passwordSection.style.display = 'none';
+        passwordInput.value = '';
+        passwordHint.style.display = 'none';
+      }
     } else {
-      passwordHint.style.display = 'none';
+      const passwordSection = document.getElementById('passwordSection');
+      const passwordInput = document.getElementById('roomPasswordInput');
+      const passwordHint = document.getElementById('passwordHint');
+      const createPwdCheckbox = document.getElementById('createPasswordRoom');
+      
+      if (data.hasPassword) {
+        passwordSection.style.display = 'block';
+        passwordInput.required = true;
+        passwordInput.placeholder = '此房间需要密码';
+        passwordHint.style.display = 'block';
+        createPwdCheckbox.checked = false;
+        createPwdCheckbox.disabled = true;
+      } else {
+        passwordHint.style.display = 'none';
+      }
     }
   });
 }
@@ -2412,6 +2429,8 @@ document.addEventListener('click', (e) => {
 // 切换房间功能
 function openSwitchRoomModal() {
   document.getElementById('newRoomIdInput').value = '';
+  document.getElementById('switchRoomPasswordSection').style.display = 'none';
+  document.getElementById('switchRoomPassword').value = '';
   document.getElementById('switchRoomModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('newRoomIdInput').focus(), 100);
 }
@@ -2422,6 +2441,9 @@ function closeSwitchRoomModal() {
 
 function confirmSwitchRoom() {
   const newRoomId = document.getElementById('newRoomIdInput').value.trim();
+  const passwordInput = document.getElementById('switchRoomPassword');
+  const password = passwordInput.value.trim();
+  
   if (!newRoomId) {
     showToast('请输入房间ID', 'error');
     return;
@@ -2432,7 +2454,6 @@ function confirmSwitchRoom() {
     return;
   }
 
-  // 清空消息列表
   const container = document.getElementById('messagesContainer');
   container.innerHTML = '<div id="loadMoreTip" class="load-more-tip">下拉加载更多历史消息...</div>';
   onlineUsers = [];
@@ -2440,16 +2461,13 @@ function confirmSwitchRoom() {
   hasMoreHistory = true;
   loadingHistory = false;
 
-  // 更新当前房间
   currentRoomId = newRoomId;
   localStorage.setItem('chat_room_id', newRoomId);
 
-  // 更新房间显示
   document.getElementById('roomBadge').textContent = newRoomId;
 
-  // 加入新房间（服务器会自动处理离开之前的房间）
   if (socket && socket.connected) {
-    socket.emit('join', { roomId: newRoomId, username, userId });
+    socket.emit('join', { roomId: newRoomId, username, userId, password });
   }
 
   closeSwitchRoomModal();
@@ -2463,4 +2481,10 @@ document.getElementById('cancelSwitchRoomBtn').addEventListener('click', closeSw
 document.getElementById('confirmSwitchRoomBtn').addEventListener('click', confirmSwitchRoom);
 document.getElementById('newRoomIdInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') confirmSwitchRoom();
+});
+document.getElementById('newRoomIdInput').addEventListener('change', (e) => {
+  const roomId = e.target.value.trim();
+  if (roomId && socket) {
+    socket.emit('checkRoomPassword', { roomId, forSwitch: true });
+  }
 });
