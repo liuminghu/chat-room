@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.chatroom.app-mergeDebugResources-31:/values-v18/values-v18.xml",
+            "map": [
+                {
+                    "source": "/root/.gradle/caches/transforms-3/f5e49d2319a94a5f2193f3f47ae7f6f6/transformed/appcompat-1.6.1/res/values-v18/values-v18.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "48",
+                        "endOffsets": "99"
+                    }
+                }
+            ]
+        }
+    ]
+}
