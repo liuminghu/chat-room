@@ -510,6 +510,22 @@ function sendMessage() {
 
   socket.emit('message', payload);
 
+  const tempMsg = {
+    id: Date.now() + Math.random(),
+    type: 'message',
+    username: username,
+    userId: userId,
+    text: text,
+    timestamp: Date.now(),
+    likes: [],
+    replyTo: payload.replyTo || null,
+    imageUrl: null,
+    audioUrl: null,
+    duration: null,
+    isLocal: true
+  };
+  displayMessage(tempMsg);
+
   const emojiRainKeywords = ['生日快乐', '恭喜', '庆祝', '谢谢', '爱心', '666', '加油', '开心', '爱你', '想你', '晚安', '早安', '下雪', '下雨', '花', '星星', '月亮', '太阳', '彩虹'];
   emojiRainKeywords.forEach(keyword => {
     if (text.includes(keyword)) {
@@ -1056,6 +1072,13 @@ function requestLoadMoreHistory() {
 function displayMessage(message, prepend = false) {
   const container = document.getElementById('messagesContainer');
   const loadMoreTip = document.getElementById('loadMoreTip');
+
+  if (!message.isLocal) {
+    const existingLocal = container.querySelector(`[data-msg-id="${message.id}"]`);
+    if (existingLocal) {
+      existingLocal.remove();
+    }
+  }
 
   if (message.id && typingMessageIds.has(message.id)) {
     return;
